@@ -7,6 +7,7 @@ export default defineConfig({
   server: {
     host: process.env.HOST || 'localhost',
     port: Number(process.env.PORT) || 5173,
+    allowedHosts: process.env.ALLOWED_HOSTS ? process.env.ALLOWED_HOSTS.split(',') : [],
     proxy: {
       '/api/admin': process.env.BACKEND_URL || 'http://localhost:2567',
     }
