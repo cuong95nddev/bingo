@@ -118,7 +118,7 @@ export class BingoRoom extends Room<BingoState> {
 
     // Calculate wins/losses for each player
     this.state.players.forEach((player) => {
-      const delta = applyBets([...player.bets], numbers);
+      const delta = applyBets([...player.bets].filter((b): b is Bet => b !== undefined), numbers);
       player.coins = Math.max(0, player.coins + delta);
       player.lastWin = delta;
       player.bets = new ArraySchema<Bet>(); // clear bets
