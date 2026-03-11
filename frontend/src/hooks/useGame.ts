@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Client, Room } from "@colyseus/sdk";
-import { GameState, GameBet } from "../types/game";
+import { Client } from "@colyseus/sdk";
+import type { Room } from "@colyseus/sdk";
+import type { GameState, GameBet } from "../types/game";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "ws://localhost:2567";
 
@@ -13,17 +14,15 @@ export function useGame(visitorId: string, name: string, enabled: boolean) {
     if (!enabled || !visitorId || !name) return;
 
     const client = new Client(BACKEND_URL);
-    let room: Room;
 
     client
       .joinOrCreate("bingo", { visitorId, name })
       .then((r) => {
-        room = r;
         roomRef.current = r;
         setConnected(true);
 
         // Sync full state on change
-        r.onStateChange((s) => {
+        r.onStateChange((s: any) => {
           const players = new Map<string, any>();
           s.players.forEach((p: any, key: string) => {
             players.set(key, {
@@ -44,7 +43,7 @@ export function useGame(visitorId: string, name: string, enabled: boolean) {
             players,
             round: {
               id: s.round.id,
-              status: s.round.status as any,
+              status: s.round.status as "betting" | "drawing" | "result",
               countdown: s.round.countdown,
               numbers: [...s.round.numbers],
             },
@@ -60,7 +59,7 @@ export function useGame(visitorId: string, name: string, enabled: boolean) {
 
         r.onLeave(() => setConnected(false));
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         console.error("Failed to join room:", err);
       });
 
