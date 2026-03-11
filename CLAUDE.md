@@ -4,10 +4,10 @@
 **Bingo 18** — Vietnamese multiplayer dice-betting game. 3 dice per round, Vietlott-style payouts. Real-time state via Colyseus WebSocket.
 
 ## Environment
-> **Do NOT start the dev server.** Always `nvm use 20` before any install.
+> **Do NOT start the dev server.** Always `nvm use 22` before any install (`@colyseus/core@0.17` requires Node >= 22).
 
 ```bash
-nvm use 20
+nvm use 22
 npm install   # installs both workspaces from root
 ```
 
@@ -58,17 +58,10 @@ bingo/
 | Exact sum | Vietlott multipliers (e.g. 4 or 17 → 50:1) |
 
 ## Admin API
-Password: set via `ADMIN_PASSWORD` env var. Vite proxies `/admin` → `http://localhost:2567`.
-
-| Method | Endpoint | Action |
-|--------|----------|--------|
-| GET | `/admin/verify?password=` | auth |
-| GET | `/admin/players?password=` | list players |
-| POST | `/admin/players/:sessionId/coins` | set/add coins (`mode: "set"\|"add"`) |
-| GET/POST | `/admin/config` | get/update config |
-| GET | `/admin/history?password=` | last 50 rounds |
+Password: set via `ADMIN_PASSWORD` env var. Backend routes at `/api/admin/*`, proxied by Vite.
 
 ## Gotchas
+- No inline comments in code; no API docs in CLAUDE.md
 - Backend: `experimentalDecorators: true` required for `@Schema`/`@type` decorators
 - ArraySchema spread: filter `undefined` before spreading (strict TS)
 - Backend: CommonJS (`"module": "commonjs"`); Frontend: ESNext modules

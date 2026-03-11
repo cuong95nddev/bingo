@@ -18,7 +18,7 @@ export function NameModal({ onSave }: Props) {
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
       <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-2xl">
         <h2 className="text-2xl font-bold text-center mb-2 text-gray-800">
-          🎲 Bingo 18
+          🎲 Bí Ngô 88
         </h2>
         <p className="text-gray-500 text-center mb-6">Nhập tên của bạn để vào game</p>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">

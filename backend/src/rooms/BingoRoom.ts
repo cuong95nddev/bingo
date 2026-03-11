@@ -5,16 +5,31 @@ import { Bet } from "../schema/Bet";
 import { ArraySchema } from "@colyseus/schema";
 import { applyBets } from "../logic/payouts";
 
-const DRAWING_DELAY = 3000; // 3s per number reveal
-const RESULT_DISPLAY = 5000; // 5s show result
+const DRAWING_DELAY = 1000; // 3s per number reveal
+const RESULT_DISPLAY = 3000; // 5s show result
+const HIGHLIGHT_DISPLAY = 3000; // 5s show win highlights
 
-export class BingoRoom extends Room<BingoState> {
+function betLabel(type: string, value: number): string {
+  switch (type) {
+    case "single": return `Đơn ${value}`;
+    case "double": return `Đôi ${value}`;
+    case "triple": return value === 0 ? "Ba bất kỳ" : `Ba ${value}`;
+    case "big":    return "Lớn";
+    case "small":  return "Nhỏ";
+    case "draw":   return "Hòa";
+    case "sum":    return `Tổng ${value}`;
+    default:       return type;
+  }
+}
+
+export class BingoRoom extends Room {
+  state = new BingoState();
   private roundTimer?: NodeJS.Timeout;
   private roundId = 0;
 
-  onCreate(options: { adminPassword?: string }) {
-    this.setState(new BingoState());
-    this.startBettingPhase();
+  onCreate(_options: { adminPassword?: string }) {
+    this.autoDispose = false;
+    this.seatReservationTimeout = 20;
 
     // Allow admin to update config via message
     this.onMessage("adminUpdateConfig", (client, data) => {
@@ -23,6 +38,9 @@ export class BingoRoom extends Room<BingoState> {
       if (data.startCoins != null) this.state.config.startCoins = data.startCoins;
       if (data.minBet != null) this.state.config.minBet = data.minBet;
       if (data.roundDuration != null) this.state.config.roundDuration = data.roundDuration;
+      if (data.houseFeeEnabled != null) this.state.config.houseFeeEnabled = data.houseFeeEnabled;
+      if (data.houseFeeMin != null) this.state.config.houseFeeMin = data.houseFeeMin;
+      if (data.houseFeeMax != null) this.state.config.houseFeeMax = data.houseFeeMax;
     });
 
     this.onMessage("placeBet", (client, data: { type: string; value: number; amount: number }) => {
@@ -39,13 +57,14 @@ export class BingoRoom extends Room<BingoState> {
       bet.amount = amount;
       player.bets.push(bet);
       player.coins -= amount;
+
+      this.broadcast("ticker", `${player.name} cược ${amount.toLocaleString("vi-VN")}đ → ${betLabel(data.type, data.value)}`);
     });
 
     this.onMessage("clearBets", (client) => {
       if (this.state.round.status !== "betting") return;
       const player = this.state.players.get(client.sessionId);
       if (!player) return;
-      // Refund all bets
       for (const bet of player.bets) {
         player.coins += bet.amount;
       }
@@ -61,8 +80,10 @@ export class BingoRoom extends Room<BingoState> {
     });
 
     if (existing) {
-      // Reassign sessionId mapping
-      this.state.players.delete(client.sessionId);
+      // Remove old sessionId entry, remap to new session
+      this.state.players.forEach((_p, key) => {
+        if (_p === existing) this.state.players.delete(key);
+      });
       this.state.players.set(client.sessionId, existing);
     } else {
       const player = new Player();
@@ -73,8 +94,33 @@ export class BingoRoom extends Room<BingoState> {
     }
   }
 
-  onLeave(_client: Client, _consented: boolean) {
+  onLeave(_client: Client, _code?: number) {
     // Keep player state for reconnect — do NOT delete
+  }
+
+  startGame(): boolean {
+    if (this.state.round.status !== "waiting") return false;
+    this.startBettingPhase();
+    return true;
+  }
+
+  resetGame(): void {
+    if (this.roundTimer) {
+      clearInterval(this.roundTimer);
+      clearTimeout(this.roundTimer);
+      this.roundTimer = undefined;
+    }
+    this.roundId = 0;
+    this.state.round.status = "waiting";
+    this.state.round.countdown = 0;
+    this.state.round.numbers.clear();
+    this.state.round.id = 0;
+    this.state.history.clear();
+    this.state.players.forEach((player) => {
+      player.coins = this.state.config.startCoins;
+      player.lastWin = 0;
+      player.bets = new ArraySchema<Bet>();
+    });
   }
 
   private startBettingPhase() {
@@ -116,12 +162,32 @@ export class BingoRoom extends Room<BingoState> {
   private startResultPhase(numbers: number[]) {
     this.state.round.status = "result";
 
-    // Calculate wins/losses for each player
+    const { houseFeeEnabled, houseFeeMin, houseFeeMax } = this.state.config;
+
+    // Calculate wins/losses for each player and broadcast ticker events
     this.state.players.forEach((player) => {
+      const hasBets = player.bets.length > 0;
       const delta = applyBets([...player.bets].filter((b): b is Bet => b !== undefined), numbers);
+
+      if (!hasBets && houseFeeEnabled && player.coins > 0) {
+        const range = Math.max(1, houseFeeMax - houseFeeMin);
+        const fee = Math.min(player.coins, houseFeeMin + Math.floor(Math.random() * (range + 1)));
+        player.coins = Math.max(0, player.coins - fee);
+        player.lastWin = -fee;
+        player.bets = new ArraySchema<Bet>();
+        this.broadcast("ticker", `🏦 ${player.name} bị thu phí ${fee.toLocaleString("vi-VN")}đ (không cược)`);
+        return;
+      }
+
       player.coins = Math.max(0, player.coins + delta);
       player.lastWin = delta;
-      player.bets = new ArraySchema<Bet>(); // clear bets
+      player.bets = new ArraySchema<Bet>();
+
+      if (delta > 0) {
+        this.broadcast("ticker", `★ ${player.name} THẮNG +${delta.toLocaleString("vi-VN")}đ`);
+      } else if (delta < 0) {
+        this.broadcast("ticker", `✗ ${player.name} thua ${delta.toLocaleString("vi-VN")}đ`);
+      }
     });
 
     // Save to history (keep last 50)
@@ -134,9 +200,12 @@ export class BingoRoom extends Room<BingoState> {
       this.state.history.splice(0, 1);
     }
 
-    // After result display, start next round
+    // After result display, move to highlight phase
     this.roundTimer = setTimeout(() => {
-      this.startBettingPhase();
+      this.state.round.status = "highlight";
+      this.roundTimer = setTimeout(() => {
+        this.startBettingPhase();
+      }, HIGHLIGHT_DISPLAY);
     }, RESULT_DISPLAY);
   }
 

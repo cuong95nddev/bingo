@@ -1,21 +1,29 @@
 import { useState, useEffect, useCallback } from "react";
 
-const API = "/admin";
+const API = "/api/admin";
 
 interface Player { sessionId: string; id: string; name: string; coins: number }
-interface Config { startCoins: number; minBet: number; roundDuration: number }
+interface Config { startCoins: number; minBet: number; roundDuration: number; houseFeeEnabled: boolean; houseFeeMin: number; houseFeeMax: number }
 interface RoundHistory { id: number; numbers: number[]; timestamp: number }
 
 export function AdminPage() {
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [authError, setAuthError] = useState("");
-  const [activeTab, setActiveTab] = useState<"players" | "config" | "history">("players");
+  const [activeTab, setActiveTab] = useState<"game" | "players" | "config" | "history">("game");
 
   const [players, setPlayers] = useState<Player[]>([]);
-  const [config, setConfig] = useState<Config>({ startCoins: 1000, minBet: 10, roundDuration: 30 });
+  const [config, setConfig] = useState<Config>({ startCoins: 1000, minBet: 10, roundDuration: 30, houseFeeEnabled: false, houseFeeMin: 10, houseFeeMax: 50 });
   const [history, setHistory] = useState<RoundHistory[]>([]);
   const [giftAmount, setGiftAmount] = useState(100);
+  const [gameStatus, setGameStatus] = useState<string>("waiting");
+  const [starting, setStarting] = useState(false);
+  const [jackpotMin, setJackpotMin] = useState(500);
+  const [jackpotMax, setJackpotMax] = useState(2000);
+  const [jackpotResult, setJackpotResult] = useState<{ total: number; perPlayer: number; playerCount: number } | null>(null);
+  const [hackerMin, setHackerMin] = useState(50);
+  const [hackerMax, setHackerMax] = useState(300);
+  const [hackerResult, setHackerResult] = useState<{ victimCount: number; playerCount: number } | null>(null);
 
   const authHeader = `?password=${password}`;
 
@@ -37,14 +45,72 @@ export function AdminPage() {
       .then(setHistory);
   }, [authHeader]);
 
+  const fetchStatus = useCallback(() => {
+    fetch(`${API}/status${authHeader}`)
+      .then((r) => r.json())
+      .then((d) => setGameStatus(d.status));
+  }, [authHeader]);
+
+  const handleStartGame = async () => {
+    setStarting(true);
+    await fetch(`${API}/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    await fetchStatus();
+    setStarting(false);
+  };
+
+  const handleHacker = async () => {
+    const res = await fetch(`${API}/hacker`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password, min: hackerMin, max: hackerMax }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setHackerResult(data);
+      setTimeout(() => setHackerResult(null), 5000);
+    }
+  };
+
+  const handleJackpot = async () => {
+    const res = await fetch(`${API}/jackpot`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password, min: jackpotMin, max: jackpotMax }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setJackpotResult(data);
+      setTimeout(() => setJackpotResult(null), 5000);
+    }
+  };
+
+  const handleNewGame = async () => {
+    if (!confirm("Reset toàn bộ dữ liệu và bắt đầu game mới?")) return;
+    await fetch(`${API}/reset`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    await fetchStatus();
+    await fetchPlayers();
+  };
+
   useEffect(() => {
     if (!authenticated) return;
     fetchPlayers();
     fetchConfig();
     fetchHistory();
-    const interval = setInterval(fetchPlayers, 5000);
+    fetchStatus();
+    const interval = setInterval(() => {
+      fetchPlayers();
+      fetchStatus();
+    }, 3000);
     return () => clearInterval(interval);
-  }, [authenticated, fetchPlayers, fetchConfig, fetchHistory]);
+  }, [authenticated, fetchPlayers, fetchConfig, fetchHistory, fetchStatus]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,6 +164,7 @@ export function AdminPage() {
   }
 
   const tabs = [
+    { key: "game", label: "Game" },
     { key: "players", label: "Players" },
     { key: "config", label: "Cấu hình" },
     { key: "history", label: "Lịch sử" },
@@ -106,7 +173,7 @@ export function AdminPage() {
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <header className="bg-gray-800 px-6 py-4 flex justify-between items-center border-b border-gray-700">
-        <h1 className="text-xl font-bold text-yellow-400">🎲 Bingo 18 — Admin</h1>
+        <h1 className="text-xl font-bold text-yellow-400">🎲 Bí Ngô 88 — Admin</h1>
         <button onClick={() => setAuthenticated(false)} className="text-gray-400 hover:text-white text-sm">
           Đăng xuất
         </button>
@@ -127,6 +194,121 @@ export function AdminPage() {
             </button>
           ))}
         </div>
+
+        {/* Game Tab */}
+        {activeTab === "game" && (
+          <div className="max-w-sm space-y-6">
+            <div className="bg-gray-800 rounded-xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400">Trạng thái</span>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  gameStatus === "waiting" ? "bg-gray-700 text-gray-300" :
+                  gameStatus === "betting" ? "bg-green-900 text-green-400" :
+                  gameStatus === "drawing" ? "bg-blue-900 text-blue-400" :
+                  "bg-yellow-900 text-yellow-400"
+                }`}>
+                  {gameStatus === "waiting" ? "Chờ bắt đầu" :
+                   gameStatus === "betting" ? "Đang đặt cược" :
+                   gameStatus === "drawing" ? "Đang quay" :
+                   "Kết quả"}
+                </span>
+              </div>
+              <button
+                onClick={handleStartGame}
+                disabled={gameStatus !== "waiting" || starting}
+                className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl text-lg transition-colors"
+              >
+                {starting ? "Đang khởi động..." : "Bắt đầu Game"}
+              </button>
+              {gameStatus !== "waiting" && (
+                <p className="text-gray-500 text-sm text-center">Game đang chạy — các vòng tự động tiếp tục</p>
+              )}
+              <button
+                onClick={handleNewGame}
+                className="w-full bg-red-700 hover:bg-red-600 text-white font-bold py-3 rounded-xl transition-colors"
+              >
+                Game Mới (Reset)
+              </button>
+            </div>
+
+            {/* Hacker */}
+            <div className="bg-gray-800 rounded-xl p-6 space-y-4" style={{ border: "1px solid #ef444430" }}>
+              <h2 className="text-red-400 font-bold text-lg">Hacker</h2>
+              <p className="text-gray-400 text-xs">Trừ tiền ngẫu nhiên của hơn 50% người chơi, hiển thị cảnh báo tấn công</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-gray-400 text-xs block mb-1">Trừ tối thiểu</label>
+                  <input
+                    type="number"
+                    value={hackerMin}
+                    onChange={(e) => setHackerMin(Number(e.target.value))}
+                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-xs block mb-1">Trừ tối đa</label>
+                  <input
+                    type="number"
+                    value={hackerMax}
+                    onChange={(e) => setHackerMax(Number(e.target.value))}
+                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={handleHacker}
+                className="w-full bg-red-700 hover:bg-red-600 text-white font-bold py-3 rounded-xl transition-colors text-lg font-mono tracking-widest"
+              >
+                HACK
+              </button>
+              {hackerResult && (
+                <div className="bg-red-900/30 border border-red-600/30 rounded-lg px-4 py-3 text-sm space-y-1">
+                  <div className="text-red-400 font-bold">Đã tấn công!</div>
+                  <div className="text-gray-300">{hackerResult.victimCount}/{hackerResult.playerCount} người bị trừ tiền</div>
+                </div>
+              )}
+            </div>
+
+            {/* Jackpot */}
+            <div className="bg-gray-800 rounded-xl p-6 space-y-4">
+              <h2 className="text-yellow-400 font-bold text-lg">Nổ Hũ</h2>
+              <p className="text-gray-400 text-xs">Chọn khoảng ngẫu nhiên — hệ thống sẽ chia đều cho tất cả người chơi</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-gray-400 text-xs block mb-1">Tối thiểu</label>
+                  <input
+                    type="number"
+                    value={jackpotMin}
+                    onChange={(e) => setJackpotMin(Number(e.target.value))}
+                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-xs block mb-1">Tối đa</label>
+                  <input
+                    type="number"
+                    value={jackpotMax}
+                    onChange={(e) => setJackpotMax(Number(e.target.value))}
+                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={handleJackpot}
+                className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 rounded-xl transition-colors text-lg"
+              >
+                Nổ Hũ
+              </button>
+              {jackpotResult && (
+                <div className="bg-yellow-900/40 border border-yellow-600/40 rounded-lg px-4 py-3 text-sm space-y-1">
+                  <div className="text-yellow-300 font-bold">Đã nổ hũ!</div>
+                  <div className="text-gray-300">Tổng: <span className="text-yellow-400 font-bold">{jackpotResult.total.toLocaleString("vi-VN")}đ</span></div>
+                  <div className="text-gray-300">Mỗi người: <span className="text-yellow-400 font-bold">+{jackpotResult.perPlayer.toLocaleString("vi-VN")}đ</span> × {jackpotResult.playerCount} người</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Players Tab */}
         {activeTab === "players" && (
@@ -222,6 +404,41 @@ export function AdminPage() {
                 onChange={(e) => setConfig({ ...config, roundDuration: Number(e.target.value) })}
                 className="w-full bg-gray-700 text-white rounded-lg px-4 py-3"
               />
+            </div>
+            <div className="border-t border-gray-700 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <label className="text-white font-medium block">Phí nhàn rỗi</label>
+                  <span className="text-gray-400 text-xs">Thu phí ngẫu nhiên nếu không đặt cược trong vòng</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConfig({ ...config, houseFeeEnabled: !config.houseFeeEnabled })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.houseFeeEnabled ? "bg-green-600" : "bg-gray-600"}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.houseFeeEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+              <div className={`grid grid-cols-2 gap-3 ${!config.houseFeeEnabled ? "opacity-40 pointer-events-none" : ""}`}>
+                <div>
+                  <label className="text-gray-400 text-sm block mb-1">Phí tối thiểu</label>
+                  <input
+                    type="number"
+                    value={config.houseFeeMin}
+                    onChange={(e) => setConfig({ ...config, houseFeeMin: Number(e.target.value) })}
+                    className="w-full bg-gray-700 text-white rounded-lg px-4 py-3"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-sm block mb-1">Phí tối đa</label>
+                  <input
+                    type="number"
+                    value={config.houseFeeMax}
+                    onChange={(e) => setConfig({ ...config, houseFeeMax: Number(e.target.value) })}
+                    className="w-full bg-gray-700 text-white rounded-lg px-4 py-3"
+                  />
+                </div>
+              </div>
             </div>
             <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-lg">
               Lưu cấu hình

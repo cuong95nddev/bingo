@@ -14,7 +14,7 @@ export interface GameBet {
 
 export interface GameRound {
   id: number;
-  status: "betting" | "drawing" | "result";
+  status: "waiting" | "betting" | "drawing" | "result" | "highlight";
   countdown: number;
   numbers: number[];
 }

@@ -1,78 +1,739 @@
+import { useState, useEffect, useRef } from "react";
 import { useIdentity } from "../hooks/useIdentity";
 import { useGame } from "../hooks/useGame";
 import { NameModal } from "../components/NameModal";
-import { Countdown } from "../components/Countdown";
-import { DiceResult } from "../components/DiceResult";
-import { Leaderboard } from "../components/Leaderboard";
 import { BettingPanel } from "../components/BettingPanel";
+
+function PlayerList({ players, mySessionId, compact = false }: { players: Map<string, any>; mySessionId: string; compact?: boolean }) {
+  const sorted = [...players.entries()].sort((a, b) => b[1].coins - a[1].coins);
+  return (
+    <div className={compact ? "px-2 py-2" : "px-3 py-3"}>
+      {!compact && (
+        <div className="text-[9px] uppercase tracking-widest mb-2" style={{ color: "#3d6a4a" }}>
+          Người chơi ({sorted.length})
+        </div>
+      )}
+      <div className="space-y-1">
+        {sorted.map(([sessionId, p], rank) => {
+          const isMe = sessionId === mySessionId;
+          return (
+            <div
+              key={sessionId}
+              className="flex items-center gap-2.5 px-3 py-2 rounded-lg"
+              style={{
+                background: isMe ? "#0e2e14" : "#0a1e0d",
+                border: isMe ? "1px solid #2a6a32" : "1px solid #122212",
+              }}
+            >
+              <span className="text-[10px] font-mono w-4 shrink-0" style={{ color: rank < 3 ? "#d4a050" : "#2a5a3a" }}>
+                {rank + 1}
+              </span>
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                style={{ background: "linear-gradient(135deg, #f97316, #dc2626)", color: "white" }}
+              >
+                {p.name.charAt(0).toUpperCase()}
+              </div>
+              <span className="flex-1 text-sm font-medium truncate" style={{ color: isMe ? "#86c988" : "#7a9a7a" }}>
+                {p.name}{isMe && <span className="ml-1 text-[9px]" style={{ color: "#4a8a5a" }}>(bạn)</span>}
+              </span>
+              <span className="font-mono text-sm font-bold shrink-0" style={{ color: "#d4a050" }}>
+                {p.coins.toLocaleString()}đ
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function formatTime(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
 
 export function UserPage() {
   const { identity, needsName, saveName } = useIdentity();
-  const { state, connected, placeBet, clearBets } = useGame(
+  const { state, connected, ticker, placeBet, jackpot, clearJackpot, hackerEvent, clearHackerEvent } = useGame(
     identity?.visitorId || "",
     identity?.name || "",
     !!identity
   );
+  const status = state?.round?.status ?? "waiting";
+
+  const [showHistory, setShowHistory] = useState(false);
+  const [stagedBets, setStagedBets] = useState<import("../types/game").GameBet[]>([]);
+  const [confirmedBets, setConfirmedBets] = useState<import("../types/game").GameBet[]>([]);
+  const [confirmed, setConfirmed] = useState(false);
+  const restoredRef = useRef(false);
+  // Persist last-round win options; cleared when next drawing starts
+  const [lastWinOptions, setLastWinOptions] = useState<Set<string>>(new Set());
+
+  // Restore confirmed bets from server state after F5
+  useEffect(() => {
+    if (restoredRef.current || !state) return;
+    restoredRef.current = true;
+    const myPlayer = state.players.get(state.mySessionId);
+    if (myPlayer && myPlayer.bets.length > 0 && state.round.status === "betting") {
+      setConfirmedBets(myPlayer.bets);
+      setConfirmed(true);
+    }
+  }, [state]);
+
+  function getWinOptions(numbers: number[]): Set<string> {
+    if (numbers.length < 3) return new Set();
+    const counts: Record<number, number> = {};
+    for (const n of numbers) counts[n] = (counts[n] || 0) + 1;
+    const sum = numbers.reduce((a, b) => a + b, 0);
+    const isTriple = Object.values(counts).some((c) => c === 3);
+    const keys = new Set<string>();
+    for (let n = 1; n <= 6; n++) {
+      if (counts[n] >= 1) keys.add(`single:${n}`);
+      if (counts[n] >= 2) keys.add(`double:${n}`);
+      if (counts[n] === 3) { keys.add(`triple:${n}`); keys.add("triple:0"); }
+    }
+    if (!isTriple && sum >= 12) keys.add("big:0");
+    if (!isTriple && sum <= 9)  keys.add("small:0");
+    if (sum === 10 || sum === 11) keys.add("draw:0");
+    keys.add(`sum:${sum}`);
+    return keys;
+  }
+
+  useEffect(() => {
+    if (status === "highlight" && state?.round?.numbers?.length === 3) {
+      setLastWinOptions(getWinOptions([...state.round.numbers]));
+    } else if (status === "drawing") {
+      setLastWinOptions(new Set());
+      setStagedBets([]);
+      setConfirmedBets([]);
+      setConfirmed(false);
+    }
+  }, [status]);
 
   if (needsName) return <NameModal onSave={saveName} />;
 
   const myPlayer = state?.players.get(state.mySessionId);
+  const totalBet = stagedBets.reduce((s, b) => s + b.amount, 0);
+  const playersCount = state?.players?.size ?? 0;
+  const isBetting = status === "betting";
+
+  const stageBet = (bet: import("../types/game").GameBet) =>
+    setStagedBets((prev) => [...prev, bet]);
+
+  const clearStaged = () => setStagedBets([]);
+
+  const confirmBets = () => {
+    for (const bet of stagedBets) placeBet(bet);
+    setConfirmedBets(stagedBets);
+    setStagedBets([]);
+    setConfirmed(true);
+  };
+
+  const winOptions = status === "highlight" ? lastWinOptions : new Set<string>();
+  const overlayVisible = status === "drawing" || status === "result";
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-4 py-3 flex justify-between items-center">
-        <h1 className="text-xl font-bold text-yellow-400">🎲 Bingo 18</h1>
-        <div className="flex items-center gap-4">
-          {!connected && <span className="text-red-400 text-sm animate-pulse">⚡ Đang kết nối...</span>}
-          {myPlayer && (
-            <div className="flex items-center gap-2">
-              <span className="text-gray-400 text-sm">{myPlayer.name}</span>
-              <span className="bg-yellow-900 text-yellow-400 px-3 py-1 rounded-full font-mono text-sm">
-                💰 {myPlayer.coins}
+    <div className="h-screen bg-[#071a09] flex justify-center overflow-hidden">
+      {/* Left leaderboard — only visible when there's enough horizontal space */}
+      <div className="hidden lg:flex flex-col w-56 shrink-0 mr-2 my-4 rounded-xl overflow-hidden" style={{ background: "#0a1a0d", border: "1px solid #1a3d1a" }}>
+        <div className="px-3 py-2.5 shrink-0" style={{ borderBottom: "1px solid #1a3d1a" }}>
+          <span className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "#3d6a4a" }}>Bảng xếp hạng</span>
+        </div>
+        <div className="overflow-y-auto flex-1">
+          {state ? (
+            <PlayerList players={state.players} mySessionId={state.mySessionId} compact />
+          ) : (
+            <div className="flex items-center justify-center h-20 text-xs" style={{ color: "#2a4a2a" }}>Đang tải...</div>
+          )}
+        </div>
+      </div>
+
+      <div className="w-full max-w-[430px] h-screen bg-[#0d2812] flex flex-col overflow-hidden">
+
+        {/* Header */}
+        <header className="bg-[#061508] px-4 py-3 flex items-center justify-between shrink-0">
+          <button className="w-8 h-8 flex items-center justify-center text-white/50 hover:text-white transition-colors">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-5 h-5">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+
+          <div className="flex items-center gap-1">
+            <span className="text-white font-black text-xl tracking-[0.18em]">BÍ NGÔ</span>
+            <span className="font-black text-xl" style={{ color: "#d4a050" }}>88</span>
+          </div>
+
+          <div className="flex items-center gap-3.5">
+            <button className="text-white/50 hover:text-white transition-colors">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 8v4M12 16h.01" />
+              </svg>
+            </button>
+            <button className="text-white/50 hover:text-white transition-colors">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" />
+              </svg>
+            </button>
+            {!connected && (
+              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Đang kết nối..." />
+            )}
+          </div>
+        </header>
+
+
+        {/* Win ticker */}
+        {ticker.length > 0 && (
+          <div className="marquee-track shrink-0" style={{ background: "#061508", borderBottom: "1px solid #1a3d1a", height: 28 }}>
+            <div className="marquee-inner h-full items-center">
+              {[...ticker, ...ticker].map((msg, i) => (
+                <span key={i} className="inline-flex items-center px-6 text-xs font-semibold" style={{ color: "#f5c842" }}>
+                  {msg}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Round info bar */}
+        {state && (
+          <div className="px-3 py-2 bg-[#0a1e0d] flex items-center gap-2 shrink-0">
+            <div className="flex-1 min-w-0">
+              <div className="text-[9px] uppercase tracking-widest" style={{ color: "#3d6a4a" }}>
+                Kỳ quay hiện tại
+              </div>
+              <div className="text-white font-mono text-sm font-bold">
+                # {String(state.round.id).padStart(7, "0")}
+              </div>
+            </div>
+
+            <div
+              className={`bg-[#111827] rounded-lg px-3 py-1 font-mono text-2xl font-bold tracking-widest shrink-0 min-w-[88px] text-center ${
+                isBetting && state.round.countdown <= 10
+                  ? "text-red-400 animate-pulse"
+                  : "text-white"
+              }`}
+            >
+              {isBetting
+                ? formatTime(state.round.countdown)
+                : status === "drawing"
+                ? "——"
+                : status === "result"
+                ? "05:00"
+                : "——"}
+            </div>
+
+            <div className="flex-1 text-right min-w-0">
+              <div className="text-[9px] uppercase tracking-widest" style={{ color: "#3d6a4a" }}>
+                Dự đoán
+              </div>
+              <div className="text-white text-sm font-medium">Kết quả 3 số</div>
+            </div>
+          </div>
+        )}
+
+        {/* History / dice result bar */}
+        {state && (
+          <div
+            className="px-3 py-1.5 flex items-center gap-2 min-h-[36px] shrink-0"
+            style={{ background: "#0a1e0d", borderBottom: "1px solid #1a3d1a" }}
+          >
+            {(status === "drawing" || status === "result") && state.round.numbers.length > 0 ? (
+              <div className="flex items-center gap-2 flex-1 overflow-hidden">
+                <div className="flex gap-1.5">
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      key={i}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm transition-all ${
+                        state.round.numbers[i]
+                          ? "opacity-100 scale-100"
+                          : status === "drawing"
+                          ? "opacity-30 scale-90"
+                          : "opacity-20"
+                      }`}
+                      style={{
+                        background: state.round.numbers[i]
+                          ? "radial-gradient(circle at 35% 30%, #f5c842, #c8860a)"
+                          : "#2a4a2a",
+                        color: "#2d1800",
+                      }}
+                    >
+                      {state.round.numbers[i] || "?"}
+                    </span>
+                  ))}
+                </div>
+                {state.round.numbers.length === 3 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px]" style={{ color: "#4a7a5a" }}>Tổng:</span>
+                    <span className="text-white font-bold text-sm">
+                      {state.round.numbers.reduce((a, b) => a + b, 0)}
+                    </span>
+                  </div>
+                )}
+                {status === "drawing" && (
+                  <span className="text-yellow-400 text-[10px] animate-pulse">Đang quay...</span>
+                )}
+                {status === "result" && myPlayer && myPlayer.lastWin !== 0 && (
+                  <span
+                    className={`font-bold text-sm ml-auto ${
+                      myPlayer.lastWin > 0 ? "text-green-400" : "text-red-400"
+                    }`}
+                  >
+                    {myPlayer.lastWin > 0 ? `+${myPlayer.lastWin}đ` : `${myPlayer.lastWin}đ`}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide flex-1">
+                {state.history.length === 0 ? (
+                  <span className="text-[10px]" style={{ color: "#2a4a2a" }}>
+                    Chưa có lịch sử
+                  </span>
+                ) : (
+                  [...state.history].reverse().slice(0, 5).map((h, idx) => (
+                    <div key={h.id} className="flex items-center gap-1.5 shrink-0">
+                      {idx > 0 && (
+                        <div className="w-px h-3.5" style={{ background: "#1a3a1a" }} />
+                      )}
+                      <div className="flex gap-0.5">
+                        {h.numbers.map((n, i) => (
+                          <span
+                            key={i}
+                            className="w-[18px] h-[18px] rounded-full flex items-center justify-center text-[9px] font-bold"
+                            style={
+                              idx === 0
+                                ? {
+                                    background: "radial-gradient(circle at 35% 30%, #f5c842, #c8860a)",
+                                    color: "#2d1800",
+                                  }
+                                : {
+                                    background: "transparent",
+                                    border: "1.5px solid #3a6040",
+                                    color: "#5a8060",
+                                  }
+                            }
+                          >
+                            {n}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowHistory(true)}
+              className="shrink-0 ml-1 w-7 h-7 rounded-full flex items-center justify-center transition-colors hover:bg-white/10"
+              style={{ background: "#22c55e" }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.5} className="w-3.5 h-3.5">
+                <path d="M18 20V10M12 20V4M6 20v-6" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Main scrollable content */}
+        {!state ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center space-y-3">
+              <div className="text-5xl">🎲</div>
+              <p style={{ color: "#3d6a4a" }}>Đang tải game...</p>
+            </div>
+          </div>
+        ) : status === "waiting" ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center space-y-4">
+              <div className="text-6xl animate-bounce">🎲</div>
+              <p className="text-lg font-medium" style={{ color: "#86c988" }}>Đang chờ game bắt đầu...</p>
+              <p className="text-sm" style={{ color: "#3d5a3d" }}>Admin sẽ khởi động game sớm thôi</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto">
+            <BettingPanel
+              onPlaceBet={stageBet}
+              onClearBets={clearStaged}
+              disabled={!isBetting || confirmed}
+              myCoins={myPlayer?.coins || 0}
+              config={state.config}
+              currentBets={confirmed ? confirmedBets : stagedBets}
+              winOptions={winOptions}
+            />
+          </div>
+        )}
+
+        {/* Cart */}
+        {(stagedBets.length > 0 || confirmed) && (() => {
+          const cartBets = confirmed ? confirmedBets : stagedBets;
+          const cartTotal = cartBets.reduce((s, b) => s + b.amount, 0);
+          return (
+            <div className="shrink-0 bg-[#0a1e0d]" style={{ borderTop: "1px solid #1a3d1a" }}>
+              <div className="px-3 pt-2 pb-1 flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] uppercase tracking-widest" style={{ color: "#3d6a4a" }}>
+                    Giỏ cược ({cartBets.length})
+                  </span>
+                  {confirmed && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: "#1a5a28", color: "#4ade80" }}>
+                      Đã xác nhận
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] font-bold" style={{ color: "#d4a050" }}>
+                  {cartTotal.toLocaleString()}đ
+                </span>
+              </div>
+              <div className="px-3 pb-2 flex flex-col gap-1 max-h-[120px] overflow-y-auto">
+                {cartBets.map((bet, idx) => {
+                  const ballCount = bet.type === "triple" ? 3 : bet.type === "double" ? 2 : bet.type === "single" ? 1 : 0;
+                  const displayValue = bet.type === "triple" && bet.value === 0 ? "★" : bet.value;
+                  return (
+                    <div key={idx} className="flex items-center gap-2">
+                      {ballCount === 0 && (
+                        <span className="text-[11px]" style={{ color: confirmed ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.7)" }}>
+                          {bet.type === "big" ? "Lớn" : bet.type === "small" ? "Nhỏ" : bet.type === "draw" ? "Hòa" : bet.type === "sum" ? `Tổng ${bet.value}` : bet.type}
+                        </span>
+                      )}
+                      {ballCount > 0 && (
+                        <div className="flex gap-0.5">
+                          {Array.from({ length: ballCount }).map((_, i) => (
+                            <div
+                              key={i}
+                              className="w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0"
+                              style={{
+                                background: "radial-gradient(circle at 35% 30%, #f5c842, #c8860a)",
+                                color: "#2d1800",
+                                boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
+                              }}
+                            >
+                              {displayValue}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <span className="flex-1" />
+                      <span className="text-[11px] font-bold" style={{ color: "#d4a050" }}>
+                        {bet.amount.toLocaleString()}đ
+                      </span>
+                      {!confirmed && (
+                        <button
+                          onClick={() => setStagedBets((prev) => prev.filter((_, i) => i !== idx))}
+                          className="w-4 h-4 flex items-center justify-center rounded-full text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors text-[10px]"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Bottom info bar */}
+        <div className="bg-[#061508] px-4 py-2.5 flex items-center justify-between shrink-0" style={{ borderTop: "1px solid #1a3d1a" }}>
+          <div className="flex items-center gap-2.5">
+            <div
+              className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+              style={{ background: "linear-gradient(135deg, #f97316, #dc2626)" }}
+            >
+              {myPlayer?.name?.charAt(0)?.toUpperCase() ?? "?"}
+            </div>
+            <div>
+              <div className="font-bold text-sm text-white leading-tight">{myPlayer?.name ?? "—"}</div>
+              <div className="text-[10px] leading-tight" style={{ color: "#4a8a5a" }}>{(myPlayer?.coins ?? 0).toLocaleString()}đ</div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-sm font-semibold text-white">
+              {playersCount} <span className="font-normal" style={{ color: "#4a8a5a" }}>👥</span>
+            </div>
+            <div className="text-[10px]" style={{ color: "#4a8a5a" }}>
+              Giá vé tạm tính:{" "}
+              <span className="font-bold" style={{ color: "#d4a050" }}>{totalBet}đ</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="px-4 py-3 bg-[#061508] flex gap-3 shrink-0" style={{ borderTop: "1px solid #1a3d1a" }}>
+          <button
+            onClick={clearStaged}
+            disabled={!isBetting || confirmed || stagedBets.length === 0}
+            className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-full font-medium text-sm transition-all disabled:opacity-40 active:scale-95"
+            style={{ border: "1.5px solid #2a5a32", color: "#6aaa7a" }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
+            Chọn lại
+          </button>
+          <button
+            onClick={confirmBets}
+            disabled={!isBetting || confirmed || totalBet === 0}
+            className="flex-[2] py-3 rounded-full font-bold text-sm transition-all disabled:opacity-40 active:scale-95"
+            style={{
+              background: confirmed
+                ? "linear-gradient(135deg, #1a5a28, #166534)"
+                : "linear-gradient(135deg, #dbb870, #c9960a)",
+              color: confirmed ? "#4ade80" : "#3d2200",
+            }}
+          >
+            {confirmed ? "Đã đặt cược" : "Xác nhận"}
+          </button>
+        </div>
+      </div>
+
+      {/* Drawing / Result overlay */}
+      {state && overlayVisible && (
+        <div
+          className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-0"
+          style={{ background: "rgba(3, 9, 4, 0.96)", backdropFilter: "blur(2px)" }}
+        >
+          {/* Round id */}
+          <div className="text-[10px] uppercase tracking-[0.25em] mb-8 px-3 py-1 rounded-full" style={{ color: "#3d6a4a", border: "1px solid #1a3d1a" }}>
+            Kỳ #{String(state.round.id).padStart(7, "0")}
+          </div>
+
+          {/* Dice */}
+          <div className="flex gap-4 mb-5">
+            {[0, 1, 2].map((i) => {
+              const val = state.round.numbers[i];
+              return (
+                <div
+                  key={i}
+                  className={`w-24 h-24 rounded-3xl flex items-center justify-center text-5xl font-black transition-all duration-500 ${
+                    val ? "scale-100 opacity-100" : "scale-75 opacity-15"
+                  }`}
+                  style={{
+                    background: val
+                      ? "radial-gradient(circle at 32% 28%, #fde068, #ca8a04)"
+                      : "#0e2510",
+                    color: val ? "#1a0a00" : "#2a5a2a",
+                    boxShadow: val
+                      ? "0 0 40px rgba(202,138,4,0.5), 0 8px 24px rgba(0,0,0,0.6), inset 0 2px 0 rgba(255,255,255,0.2)"
+                      : "inset 0 0 0 1.5px #1a3d1a",
+                  }}
+                >
+                  {val || "?"}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Sum */}
+          {state.round.numbers.length === 3 && (
+            <div
+              className="flex items-center gap-3 px-6 py-3 rounded-2xl mb-5"
+              style={{ background: "#0e2510", border: "1px solid #1a4a1a" }}
+            >
+              <span className="text-xs uppercase tracking-widest font-semibold" style={{ color: "#4a8a5a" }}>Tổng</span>
+              <span className="text-4xl font-black" style={{ color: "#fbbf24" }}>
+                {state.round.numbers.reduce((a, b) => a + b, 0)}
               </span>
             </div>
           )}
-        </div>
-      </header>
 
-      {!state ? (
-        <div className="flex items-center justify-center h-64 text-gray-400">
-          Đang tải game...
-        </div>
-      ) : (
-        <div className="max-w-6xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Left: Betting Panel */}
-          <div className="lg:col-span-2 space-y-4">
-            <div className="bg-gray-800 rounded-xl p-4">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-gray-400 text-sm">Vòng #{state.round.id}</span>
-                <Countdown seconds={state.round.countdown} status={state.round.status} />
+          {/* Status label */}
+          {status === "drawing" && (
+            <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "#fbbf24" }}>
+              <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-ping inline-block" />
+              Đang quay số...
+            </div>
+          )}
+
+          {/* Win / loss result */}
+          {status === "result" && myPlayer && myPlayer.lastWin > 0 && (
+            <div className="flex flex-col items-center gap-1">
+              <div
+                className="text-4xl font-black px-8 py-3 rounded-2xl"
+                style={{
+                  background: "linear-gradient(135deg, #14532d, #166534)",
+                  color: "#4ade80",
+                  boxShadow: "0 0 32px rgba(74,222,128,0.25), 0 4px 16px rgba(0,0,0,0.4)",
+                  border: "1px solid #22c55e40",
+                }}
+              >
+                +{myPlayer.lastWin.toLocaleString()}đ
               </div>
-              <DiceResult numbers={state.round.numbers} status={state.round.status} />
-              {state.round.status === "result" && myPlayer && myPlayer.lastWin !== 0 && (
-                <div className={`text-center text-2xl font-bold mt-3 ${myPlayer.lastWin > 0 ? "text-green-400" : "text-red-400"}`}>
-                  {myPlayer.lastWin > 0 ? `+${myPlayer.lastWin} 💰 Thắng!` : `${myPlayer.lastWin} 💰 Thua`}
+              <span className="text-xs font-medium mt-1" style={{ color: "#4ade80" }}>Chúc mừng!</span>
+            </div>
+          )}
+          {status === "result" && myPlayer && myPlayer.lastWin < 0 && (
+            <div
+              className="text-3xl font-black px-8 py-3 rounded-2xl"
+              style={{
+                background: "linear-gradient(135deg, #450a0a, #7f1d1d)",
+                color: "#f87171",
+                boxShadow: "0 0 24px rgba(248,113,113,0.15), 0 4px 16px rgba(0,0,0,0.4)",
+                border: "1px solid #ef444430",
+              }}
+            >
+              {myPlayer.lastWin.toLocaleString()}đ
+            </div>
+          )}
+          {status === "result" && myPlayer && myPlayer.lastWin === 0 && (
+            <div className="text-sm font-medium px-5 py-2 rounded-xl" style={{ background: "#0e2510", color: "#4a6a4a", border: "1px solid #1a3d1a" }}>
+              Không trúng lần này
+            </div>
+          )}
+
+          {/* Countdown until next round */}
+          {status === "result" && (
+            <div className="mt-8 text-[11px] tracking-widest uppercase" style={{ color: "#2a5a2a" }}>
+              Vòng tiếp theo sắp bắt đầu...
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* History dialog */}
+      {showHistory && state && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          style={{ background: "rgba(0,0,0,0.6)" }}
+          onClick={(e) => e.target === e.currentTarget && setShowHistory(false)}
+        >
+          <div
+            className="w-full max-w-[430px] rounded-t-2xl flex flex-col"
+            style={{ background: "#0d2812", maxHeight: "75vh" }}
+          >
+            {/* Dialog header */}
+            <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ borderBottom: "1px solid #1a3d1a" }}>
+              <span className="text-white font-bold text-base">Lịch sử kết quả</span>
+              <button
+                onClick={() => setShowHistory(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* List */}
+            <div className="overflow-y-auto flex-1 px-3 py-2">
+              {[...state.history].reverse().map((h, idx) => {
+                const sum = h.numbers.reduce((a, b) => a + b, 0);
+                return (
+                  <div
+                    key={h.id}
+                    className="flex items-center gap-3 py-2.5"
+                    style={{ borderBottom: "1px solid #1a3a1a" }}
+                  >
+                    <span className="text-[10px] font-mono shrink-0" style={{ color: "#3d6a4a", minWidth: 32 }}>
+                      #{String(h.id).padStart(4, "0")}
+                    </span>
+                    <div className="flex gap-1 flex-1">
+                      {h.numbers.map((n, i) => (
+                        <span
+                          key={i}
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold"
+                          style={
+                            idx === 0
+                              ? {
+                                  background: "radial-gradient(circle at 35% 30%, #f5c842, #c8860a)",
+                                  color: "#2d1800",
+                                }
+                              : {
+                                  background: "transparent",
+                                  border: "1.5px solid #3a6040",
+                                  color: "#5a8060",
+                                }
+                          }
+                        >
+                          {n}
+                        </span>
+                      ))}
+                    </div>
+                    <span className="text-xs font-bold shrink-0" style={{ color: "#d4a050" }}>
+                      Tổng: {sum}
+                    </span>
+                  </div>
+                );
+              })}
+              {state.history.length === 0 && (
+                <div className="text-center py-8" style={{ color: "#3d6a4a" }}>
+                  Chưa có lịch sử
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
 
-            <div className="bg-gray-800 rounded-xl p-4">
-              <BettingPanel
-                onPlaceBet={placeBet}
-                onClearBets={clearBets}
-                disabled={state.round.status !== "betting"}
-                myCoins={myPlayer?.coins || 0}
-                config={state.config}
-                currentBets={myPlayer?.bets || []}
-              />
+      {/* Hacker overlay */}
+      {hackerEvent && (
+        <div
+          className="fixed inset-0 z-[60] flex flex-col items-center justify-center px-6"
+          style={{ background: "rgba(0,0,0,0.92)", backdropFilter: "blur(4px)" }}
+          onClick={clearHackerEvent}
+        >
+          <div className="text-5xl mb-4 animate-pulse">⚠️</div>
+          <div
+            className="w-full max-w-sm text-center px-6 py-6 rounded-3xl space-y-4"
+            style={{ background: "linear-gradient(135deg, #1a0000, #3d0000)", border: "1px solid #ef444460" }}
+          >
+            <div className="font-black text-2xl tracking-widest" style={{ color: "#ef4444", fontFamily: "monospace" }}>
+              HỆ THỐNG BỊ TẤN CÔNG
+            </div>
+            <div className="text-red-300 text-sm font-mono">
+              Hacker đã xâm nhập và đánh cắp xu của người chơi!
+            </div>
+            <div className="space-y-1.5 max-h-40 overflow-y-auto">
+              {hackerEvent.victims.map((v, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between px-3 py-1.5 rounded-lg text-sm"
+                  style={{ background: "rgba(239,68,68,0.15)", border: "1px solid #ef444430" }}
+                >
+                  <span className="text-red-200 font-medium">{v.name}</span>
+                  <span className="text-red-400 font-bold font-mono">−{v.amount.toLocaleString("vi-VN")}đ</span>
+                </div>
+              ))}
+            </div>
+            <div className="text-red-300/60 text-xs leading-relaxed border-t border-red-900 pt-3">
+              Rất xin lỗi quý khách vì sự bất tiện này. Chúng tôi đang khắc phục sự cố.
             </div>
           </div>
+          <p className="text-white/20 text-xs mt-5">Nhấn bất kỳ để đóng</p>
+        </div>
+      )}
 
-          {/* Right: Leaderboard */}
-          <div className="bg-gray-800 rounded-xl p-4">
-            <Leaderboard players={state.players} mySessionId={state.mySessionId} />
+      {/* Jackpot overlay */}
+      {jackpot && (
+        <div
+          className="fixed inset-0 z-[60] flex flex-col items-center justify-center px-6"
+          style={{ background: "rgba(0,0,0,0.88)", backdropFilter: "blur(4px)" }}
+          onClick={clearJackpot}
+        >
+          <div className="text-6xl mb-4 animate-bounce">🎉</div>
+          <div
+            className="text-center px-8 py-6 rounded-3xl space-y-3"
+            style={{ background: "linear-gradient(135deg, #7c2d12, #b45309)", border: "1px solid #f59e0b80" }}
+          >
+            <div className="text-white font-black text-2xl tracking-wide">NỔ HŨ!</div>
+            <div className="text-yellow-200 text-sm">Có người chơi nổ hũ và chia sẻ</div>
+            <div className="text-yellow-300 font-black text-4xl">
+              {jackpot.total.toLocaleString("vi-VN")}đ
+            </div>
+            <div className="text-orange-200 text-sm">
+              cho {jackpot.playerCount} người chơi
+            </div>
+            <div
+              className="text-white font-bold text-xl px-4 py-2 rounded-xl"
+              style={{ background: "rgba(0,0,0,0.3)" }}
+            >
+              +{jackpot.perPlayer.toLocaleString("vi-VN")}đ / người
+            </div>
           </div>
+          <p className="text-white/30 text-xs mt-6">Nhấn bất kỳ để đóng</p>
         </div>
       )}
     </div>
