@@ -145,6 +145,18 @@ export function UserPage() {
   const winOptions = status === "highlight" ? lastWinOptions : new Set<string>();
   const overlayVisible = status === "drawing" || status === "result";
 
+  useEffect(() => {
+    if (!hackerEvent) return;
+    const timer = setTimeout(clearHackerEvent, 2000);
+    return () => clearTimeout(timer);
+  }, [hackerEvent, clearHackerEvent]);
+
+  useEffect(() => {
+    if (!jackpot) return;
+    const timer = setTimeout(clearJackpot, 2000);
+    return () => clearTimeout(timer);
+  }, [jackpot, clearJackpot]);
+
   return (
     <div className="h-screen bg-[#071a09] flex justify-center overflow-hidden">
       {/* Left leaderboard — only visible when there's enough horizontal space */}

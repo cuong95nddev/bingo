@@ -5,7 +5,6 @@ import type { Room } from "@colyseus/sdk";
 import {
   Shield,
   Dice5,
-  Gamepad2,
   Users,
   Settings,
   ClipboardList,
@@ -27,11 +26,9 @@ const API = "/api/admin";
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "ws://localhost:2567";
 
 interface Player { sessionId: string; id: string; name: string; coins: number }
-interface Config { startCoins: number; minBet: number; roundDuration: number; maxRounds: number; diceMax: number; houseFeeEnabled: boolean; houseFeeMin: number; houseFeeMax: number; hackerEnabled: boolean; hackerMin: number; hackerMax: number; jackpotEnabled: boolean; jackpotMin: number; jackpotMax: number }
+interface Config { startCoins: number; minBet: number; roundDuration: number; maxRounds: number; diceMax: number; houseFeeEnabled: boolean; houseFeeMin: number; houseFeeMax: number; hackerEnabled: boolean; hackerChance: number; hackerMin: number; hackerMax: number; jackpotEnabled: boolean; jackpotChance: number; jackpotMin: number; jackpotMax: number }
 interface RoundHistory { id: number; numbers: number[]; timestamp: number }
 interface StatusResponse { status: string; countdown: number; roundId: number; numbers: number[]; maxRounds: number; diceMax: number }
-
-type Tab = "game" | "players" | "config" | "history";
 
 const DICE_FACES = "⚀⚁⚂⚃⚄⚅";
 const STATUS_LABELS: Record<string, string> = {
@@ -77,67 +74,6 @@ function LoginScreen({ password, setPassword, onLogin, error }: {
           Đăng nhập
         </button>
       </form>
-    </div>
-  );
-}
-
-function Sidebar({ activeTab, setActiveTab, playerCount, onLogout }: {
-  activeTab: Tab; setActiveTab: (t: Tab) => void; playerCount: number; onLogout: () => void;
-}) {
-  const navItems: { key: Tab; icon: typeof Gamepad2; label: string; badge?: number }[] = [
-    { key: "game", icon: Gamepad2, label: "Game" },
-    { key: "players", icon: Users, label: "Players", badge: playerCount },
-    { key: "config", icon: Settings, label: "Cấu hình" },
-    { key: "history", icon: ClipboardList, label: "Lịch sử" },
-  ];
-
-  return (
-    <div className="w-60 bg-slate-900 border-r border-slate-800 flex flex-col min-h-screen">
-      <div className="px-5 py-5 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-indigo-600/20 flex items-center justify-center">
-            <Dice5 className="w-5 h-5 text-indigo-400" />
-          </div>
-          <div>
-            <div className="text-white font-semibold text-sm tracking-tight">Bí Ngô 88</div>
-            <div className="text-[10px] uppercase tracking-widest text-indigo-400 font-medium">Admin</div>
-          </div>
-        </div>
-      </div>
-      <nav className="flex-1 py-3 px-3 space-y-0.5">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const active = activeTab === item.key;
-          return (
-            <button
-              key={item.key}
-              onClick={() => setActiveTab(item.key)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                active
-                  ? "bg-slate-800 text-indigo-400 border-l-2 border-indigo-500 pl-[10px]"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-              }`}
-            >
-              <Icon className="w-4 h-4 shrink-0" />
-              <span>{item.label}</span>
-              {item.badge != null && item.badge > 0 && (
-                <span className="ml-auto bg-indigo-600/30 text-indigo-300 text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                  {item.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
-      <div className="p-3 border-t border-slate-800">
-        <button
-          onClick={onLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 hover:text-red-400 hover:bg-slate-800/60 transition-all"
-        >
-          <LogOut className="w-4 h-4" />
-          <span>Đăng xuất</span>
-        </button>
-      </div>
     </div>
   );
 }
@@ -237,46 +173,6 @@ function LiveRoundCard({ statusData }: { statusData: StatusResponse }) {
   );
 }
 
-function GameTab({ gameStatus, starting, onStart, onNewGame }: {
-  gameStatus: string; starting: boolean; onStart: () => void; onNewGame: () => void;
-}) {
-  return (
-    <div className="grid grid-cols-2 gap-4">
-      <div className="bg-slate-800/80 rounded-xl p-5 border border-slate-700/50">
-        <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
-          <Play className="w-4 h-4 text-emerald-400" /> Điều khiển
-        </h3>
-        <button
-          onClick={onStart}
-          disabled={gameStatus !== "waiting" || starting}
-          className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl text-lg transition-colors flex items-center justify-center gap-2"
-        >
-          <Play className="w-5 h-5" />
-          {starting ? "Đang khởi động..." : "Bắt đầu Game"}
-        </button>
-        {gameStatus !== "waiting" && (
-          <p className="text-slate-500 text-sm text-center mt-3">
-            {gameStatus === "finished" ? "Game đã kết thúc — nhấn Reset để chơi lại" : "Game đang chạy — các vòng tự động tiếp tục"}
-          </p>
-        )}
-      </div>
-      <div className="bg-slate-800/80 rounded-xl p-5 border border-slate-700/50">
-        <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
-          <RotateCcw className="w-4 h-4 text-red-400" /> Reset
-        </h3>
-        <button
-          onClick={onNewGame}
-          className="w-full bg-red-600/80 hover:bg-red-600 text-white font-bold py-4 rounded-xl text-lg transition-colors flex items-center justify-center gap-2"
-        >
-          <RotateCcw className="w-5 h-5" />
-          Game Mới (Reset)
-        </button>
-        <p className="text-slate-500 text-sm text-center mt-3">Reset toàn bộ dữ liệu và bắt đầu lại</p>
-      </div>
-    </div>
-  );
-}
-
 function Toggle({ enabled, onToggle, color = "bg-emerald-600" }: {
   enabled: boolean; onToggle: () => void; color?: string;
 }) {
@@ -346,11 +242,15 @@ function ConfigForm({ config, setConfig }: { config: Config; setConfig: (c: Conf
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-red-400 font-semibold flex items-center gap-2"><Zap className="w-4 h-4" /> Hacker</h3>
-            <p className="text-slate-500 text-xs mt-0.5">Ngẫu nhiên trừ tiền người chơi mỗi vòng (~20%)</p>
+            <p className="text-slate-500 text-xs mt-0.5">Ngẫu nhiên trừ tiền người chơi mỗi vòng</p>
           </div>
           <Toggle enabled={config.hackerEnabled} onToggle={() => setConfig({ ...config, hackerEnabled: !config.hackerEnabled })} color="bg-red-600" />
         </div>
-        <div className={`grid grid-cols-2 gap-3 transition-opacity ${!config.hackerEnabled ? "opacity-30 pointer-events-none" : ""}`}>
+        <div className={`grid grid-cols-3 gap-3 transition-opacity ${!config.hackerEnabled ? "opacity-30 pointer-events-none" : ""}`}>
+          <div>
+            <label className="text-slate-400 text-xs font-medium block mb-1.5">Tỉ lệ (%)</label>
+            <input type="number" value={config.hackerChance} min={0} max={100} onChange={(e) => setConfig({ ...config, hackerChance: Math.max(0, Math.min(100, Number(e.target.value))) })} className="w-full bg-slate-900 text-white rounded-lg px-3 py-2 text-sm border border-slate-700/50 focus:ring-2 focus:ring-red-500 outline-none" />
+          </div>
           <div>
             <label className="text-slate-400 text-xs font-medium block mb-1.5">Trừ tối thiểu</label>
             <input type="number" value={config.hackerMin} onChange={(e) => setConfig({ ...config, hackerMin: Number(e.target.value) })} className="w-full bg-slate-900 text-white rounded-lg px-3 py-2 text-sm border border-slate-700/50 focus:ring-2 focus:ring-red-500 outline-none" />
@@ -366,11 +266,15 @@ function ConfigForm({ config, setConfig }: { config: Config; setConfig: (c: Conf
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-amber-400 font-semibold flex items-center gap-2"><Trophy className="w-4 h-4" /> Nổ Hũ</h3>
-            <p className="text-slate-500 text-xs mt-0.5">Ngẫu nhiên chia tiền cho tất cả mỗi vòng (~15%)</p>
+            <p className="text-slate-500 text-xs mt-0.5">Ngẫu nhiên chia tiền cho tất cả mỗi vòng</p>
           </div>
           <Toggle enabled={config.jackpotEnabled} onToggle={() => setConfig({ ...config, jackpotEnabled: !config.jackpotEnabled })} color="bg-amber-600" />
         </div>
-        <div className={`grid grid-cols-2 gap-3 transition-opacity ${!config.jackpotEnabled ? "opacity-30 pointer-events-none" : ""}`}>
+        <div className={`grid grid-cols-3 gap-3 transition-opacity ${!config.jackpotEnabled ? "opacity-30 pointer-events-none" : ""}`}>
+          <div>
+            <label className="text-slate-400 text-xs font-medium block mb-1.5">Tỉ lệ (%)</label>
+            <input type="number" value={config.jackpotChance} min={0} max={100} onChange={(e) => setConfig({ ...config, jackpotChance: Math.max(0, Math.min(100, Number(e.target.value))) })} className="w-full bg-slate-900 text-white rounded-lg px-3 py-2 text-sm border border-slate-700/50 focus:ring-2 focus:ring-amber-500 outline-none" />
+          </div>
           <div>
             <label className="text-slate-400 text-xs font-medium block mb-1.5">Tối thiểu</label>
             <input type="number" value={config.jackpotMin} onChange={(e) => setConfig({ ...config, jackpotMin: Number(e.target.value) })} className="w-full bg-slate-900 text-white rounded-lg px-3 py-2 text-sm border border-slate-700/50 focus:ring-2 focus:ring-amber-500 outline-none" />
@@ -385,99 +289,86 @@ function ConfigForm({ config, setConfig }: { config: Config; setConfig: (c: Conf
   );
 }
 
-function ConfigTab({ config, setConfig, onSave }: {
-  config: Config; setConfig: (c: Config) => void; onSave: (e?: React.FormEvent) => void;
-}) {
-  return (
-    <div>
-      <ConfigForm config={config} setConfig={setConfig} />
-      <button
-        onClick={() => onSave()}
-        className="w-full mt-5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2"
-      >
-        <Settings className="w-4 h-4" />
-        Lưu cấu hình
-      </button>
-    </div>
-  );
-}
-
-function PlayersTab({ players, giftAmount, setGiftAmount, handleGiftCoins }: {
+function PlayersSection({ players, giftAmount, setGiftAmount, handleGiftCoins }: {
   players: Player[]; giftAmount: number; setGiftAmount: (v: number) => void;
   handleGiftCoins: (sessionId: string, mode: "add" | "set") => void;
 }) {
   return (
-    <div>
-      <div className="flex items-center gap-4 mb-4">
-        <span className="text-slate-400 text-sm font-medium">{players.length} players</span>
-        <div className="flex items-center gap-2 ml-auto">
+    <div className="bg-slate-800/80 rounded-xl border border-slate-700/50 overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-700/50">
+        <h3 className="text-white font-semibold flex items-center gap-2">
+          <Users className="w-4 h-4 text-indigo-400" /> Players
+          <span className="text-slate-500 text-sm font-normal ml-1">{players.length}</span>
+        </h3>
+        <div className="flex items-center gap-2">
           <Coins className="w-4 h-4 text-slate-500" />
           <input
             type="number"
             value={giftAmount}
             onChange={(e) => setGiftAmount(Number(e.target.value))}
-            className="w-24 bg-slate-800 text-white rounded-lg px-3 py-1.5 text-sm border border-slate-700/50 focus:ring-2 focus:ring-indigo-500 outline-none"
+            className="w-24 bg-slate-900 text-white rounded-lg px-3 py-1.5 text-sm border border-slate-700/50 focus:ring-2 focus:ring-indigo-500 outline-none"
           />
         </div>
       </div>
-      <div className="bg-slate-800/80 rounded-xl border border-slate-700/50 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-slate-400 text-xs uppercase tracking-wider border-b border-slate-700/50">
-              <th className="text-left py-3 px-4 font-medium">Tên</th>
-              <th className="text-right py-3 px-4 font-medium">Coins</th>
-              <th className="text-center py-3 px-4 font-medium">Thao tác</th>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-slate-400 text-xs uppercase tracking-wider border-b border-slate-700/50">
+            <th className="text-left py-3 px-4 font-medium">Tên</th>
+            <th className="text-right py-3 px-4 font-medium">Coins</th>
+            <th className="text-center py-3 px-4 font-medium">Thao tác</th>
+          </tr>
+        </thead>
+        <tbody>
+          {players.map((p, i) => (
+            <tr key={p.sessionId} className={`border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors ${i % 2 ? "bg-slate-800/30" : ""}`}>
+              <td className="py-3 px-4">
+                <div className="text-white font-medium">{p.name}</div>
+                <div className="text-slate-600 text-xs font-mono">{p.id.slice(0, 12)}...</div>
+              </td>
+              <td className="py-3 px-4 text-right font-mono text-amber-400 font-semibold">{p.coins.toLocaleString()}</td>
+              <td className="py-3 px-4">
+                <div className="flex gap-1.5 justify-center">
+                  <button onClick={() => handleGiftCoins(p.sessionId, "add")} className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors">
+                    <Plus className="w-3 h-3" />{giftAmount}
+                  </button>
+                  <button onClick={() => handleGiftCoins(p.sessionId, "set")} className="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors">
+                    <Replace className="w-3 h-3" />{giftAmount}
+                  </button>
+                  <button onClick={() => { handleGiftCoins(p.sessionId, "set"); }} className="bg-red-600/20 hover:bg-red-600/30 text-red-400 px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors">
+                    <Trash2 className="w-3 h-3" />0
+                  </button>
+                </div>
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {players.map((p, i) => (
-              <tr key={p.sessionId} className={`border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors ${i % 2 ? "bg-slate-800/30" : ""}`}>
-                <td className="py-3 px-4">
-                  <div className="text-white font-medium">{p.name}</div>
-                  <div className="text-slate-600 text-xs font-mono">{p.id.slice(0, 12)}...</div>
-                </td>
-                <td className="py-3 px-4 text-right font-mono text-amber-400 font-semibold">{p.coins.toLocaleString()}</td>
-                <td className="py-3 px-4">
-                  <div className="flex gap-1.5 justify-center">
-                    <button onClick={() => handleGiftCoins(p.sessionId, "add")} className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors">
-                      <Plus className="w-3 h-3" />{giftAmount}
-                    </button>
-                    <button onClick={() => handleGiftCoins(p.sessionId, "set")} className="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors">
-                      <Replace className="w-3 h-3" />{giftAmount}
-                    </button>
-                    <button onClick={() => { handleGiftCoins(p.sessionId, "set"); }} className="bg-red-600/20 hover:bg-red-600/30 text-red-400 px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors">
-                      <Trash2 className="w-3 h-3" />0
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {players.length === 0 && (
-              <tr><td colSpan={3} className="py-12 text-center text-slate-600">Chưa có người chơi nào</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+          ))}
+          {players.length === 0 && (
+            <tr><td colSpan={3} className="py-12 text-center text-slate-600">Chưa có người chơi nào</td></tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-function HistoryTab({ history, diceMax }: { history: RoundHistory[]; diceMax: number }) {
+function HistorySection({ history, diceMax }: { history: RoundHistory[]; diceMax: number }) {
   const t = computeThresholds(diceMax);
   return (
-    <div>
-      <div className="flex items-center gap-3 mb-4">
-        <span className="text-slate-400 text-sm font-medium">{history.length} vòng</span>
+    <div className="bg-slate-800/80 rounded-xl border border-slate-700/50 overflow-hidden">
+      <div className="px-5 py-3.5 border-b border-slate-700/50">
+        <h3 className="text-white font-semibold flex items-center gap-2">
+          <ClipboardList className="w-4 h-4 text-amber-400" /> Lịch sử
+          <span className="text-slate-500 text-sm font-normal ml-1">{history.length} vòng</span>
+        </h3>
       </div>
-      <div className="space-y-2">
+      <div className="p-3 space-y-2 max-h-80 overflow-y-auto">
         {history.map((h) => {
           const sum = h.numbers.reduce((a, b) => a + b, 0);
           return (
-            <div key={h.id} className="bg-slate-800/80 rounded-xl px-5 py-3.5 flex items-center gap-5 border border-slate-700/30 hover:border-slate-700/50 transition-colors">
-              <span className="text-slate-500 text-sm font-mono w-14">#{h.id}</span>
-              <div className="flex gap-2.5 text-2xl">
+            <div key={h.id} className="bg-slate-900/60 rounded-xl px-4 py-3 flex items-center gap-4 border border-slate-700/30 hover:border-slate-700/50 transition-colors">
+              <span className="text-slate-500 text-sm font-mono w-12">#{h.id}</span>
+              <div className="flex gap-2 text-xl">
                 {h.numbers.map((n, i) => (
-                  <span key={i} className="w-10 h-10 rounded-lg bg-slate-700/50 flex items-center justify-center">{DICE_FACES[n - 1]}</span>
+                  <span key={i} className="w-9 h-9 rounded-lg bg-slate-700/50 flex items-center justify-center">{DICE_FACES[n - 1]}</span>
                 ))}
               </div>
               <div className="flex items-center gap-2">
@@ -506,10 +397,9 @@ export function AdminPage() {
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [authError, setAuthError] = useState("");
-  const [activeTab, setActiveTab] = useState<Tab>("game");
 
   const [players, setPlayers] = useState<Player[]>([]);
-  const [config, setConfig] = useState<Config>({ startCoins: 1000, minBet: 10, roundDuration: 30, maxRounds: 0, diceMax: 6, houseFeeEnabled: false, houseFeeMin: 10, houseFeeMax: 50, hackerEnabled: false, hackerMin: 50, hackerMax: 300, jackpotEnabled: false, jackpotMin: 500, jackpotMax: 2000 });
+  const [config, setConfig] = useState<Config>({ startCoins: 1000, minBet: 10, roundDuration: 30, maxRounds: 0, diceMax: 6, houseFeeEnabled: false, houseFeeMin: 10, houseFeeMax: 50, hackerEnabled: false, hackerChance: 20, hackerMin: 50, hackerMax: 300, jackpotEnabled: false, jackpotChance: 15, jackpotMin: 500, jackpotMax: 2000 });
   const [history, setHistory] = useState<RoundHistory[]>([]);
   const [giftAmount, setGiftAmount] = useState(100);
   const [statusData, setStatusData] = useState<StatusResponse>({ status: "waiting", countdown: 0, roundId: 0, numbers: [], maxRounds: 0, diceMax: 6 });
@@ -575,9 +465,11 @@ interface RawState {
               houseFeeMin: s.config.houseFeeMin,
               houseFeeMax: s.config.houseFeeMax,
               hackerEnabled: s.config.hackerEnabled,
+              hackerChance: s.config.hackerChance ?? 20,
               hackerMin: s.config.hackerMin,
               hackerMax: s.config.hackerMax,
               jackpotEnabled: s.config.jackpotEnabled,
+              jackpotChance: s.config.jackpotChance ?? 15,
               jackpotMin: s.config.jackpotMin,
               jackpotMax: s.config.jackpotMax,
             });
@@ -653,45 +545,74 @@ interface RawState {
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-950 text-white">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} playerCount={players.length} onLogout={() => setAuthenticated(false)} />
-
-      <div className="flex-1 flex flex-col min-h-screen">
-        <header className="bg-slate-900 border-b border-slate-800 px-6 py-3.5 flex justify-between items-center shrink-0">
-          <h2 className="text-base font-semibold text-white">
-            {activeTab === "game" && "Game"}
-            {activeTab === "players" && "Players"}
-            {activeTab === "config" && "Cấu hình"}
-            {activeTab === "history" && "Lịch sử"}
-          </h2>
-          <div className="flex items-center gap-3">
-            <span className="bg-indigo-600/20 text-indigo-400 px-2.5 py-1 rounded-lg text-xs font-medium">Admin</span>
+    <div className="min-h-screen bg-slate-950 text-white">
+      <header className="bg-slate-900 border-b border-slate-800 px-6 py-3.5 flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-indigo-600/20 flex items-center justify-center">
+            <Dice5 className="w-5 h-5 text-indigo-400" />
           </div>
-        </header>
+          <div>
+            <div className="text-white font-semibold text-sm tracking-tight">Bí Ngô 88</div>
+            <div className="text-[10px] uppercase tracking-widest text-indigo-400 font-medium">Admin Dashboard</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="bg-indigo-600/20 text-indigo-400 px-2.5 py-1 rounded-lg text-xs font-medium">Admin</span>
+          <button
+            onClick={() => setAuthenticated(false)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-slate-500 hover:text-red-400 hover:bg-slate-800/60 transition-all"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Đăng xuất</span>
+          </button>
+        </div>
+      </header>
 
-        <main className="flex-1 p-6 space-y-5 overflow-y-auto">
-          <KpiCards playerCount={players.length} gameStatus={gameStatus} totalRounds={history.length} />
-          <LiveRoundCard statusData={statusData} />
+      <main className="max-w-7xl mx-auto p-6 space-y-5">
+        <KpiCards playerCount={players.length} gameStatus={gameStatus} totalRounds={history.length} />
+        <LiveRoundCard statusData={statusData} />
 
-          {activeTab === "game" && (
-            <GameTab
-              gameStatus={gameStatus}
-              starting={starting}
-              onStart={() => setShowStartDialog(true)}
-              onNewGame={handleNewGame}
-            />
-          )}
-          {activeTab === "players" && (
-            <PlayersTab players={players} giftAmount={giftAmount} setGiftAmount={setGiftAmount} handleGiftCoins={handleGiftCoins} />
-          )}
-          {activeTab === "config" && (
-            <ConfigTab config={config} setConfig={setConfig} onSave={handleSaveConfig} />
-          )}
-          {activeTab === "history" && (
-            <HistoryTab history={history} diceMax={config.diceMax} />
-          )}
-        </main>
-      </div>
+        {/* Game controls */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-slate-800/80 rounded-xl p-5 border border-slate-700/50">
+            <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+              <Play className="w-4 h-4 text-emerald-400" /> Điều khiển
+            </h3>
+            <button
+              onClick={() => setShowStartDialog(true)}
+              disabled={gameStatus !== "waiting" || starting}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl text-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <Play className="w-5 h-5" />
+              {starting ? "Đang khởi động..." : "Bắt đầu Game"}
+            </button>
+            {gameStatus !== "waiting" && (
+              <p className="text-slate-500 text-sm text-center mt-3">
+                {gameStatus === "finished" ? "Game đã kết thúc — nhấn Reset để chơi lại" : "Game đang chạy — các vòng tự động tiếp tục"}
+              </p>
+            )}
+          </div>
+          <div className="bg-slate-800/80 rounded-xl p-5 border border-slate-700/50">
+            <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+              <RotateCcw className="w-4 h-4 text-red-400" /> Reset
+            </h3>
+            <button
+              onClick={handleNewGame}
+              className="w-full bg-red-600/80 hover:bg-red-600 text-white font-bold py-4 rounded-xl text-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <RotateCcw className="w-5 h-5" />
+              Game Mới (Reset)
+            </button>
+            <p className="text-slate-500 text-sm text-center mt-3">Reset toàn bộ dữ liệu và bắt đầu lại</p>
+          </div>
+        </div>
+
+        {/* Players */}
+        <PlayersSection players={players} giftAmount={giftAmount} setGiftAmount={setGiftAmount} handleGiftCoins={handleGiftCoins} />
+
+        {/* History */}
+        <HistorySection history={history} diceMax={config.diceMax} />
+      </main>
 
       {showStartDialog && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowStartDialog(false)}>

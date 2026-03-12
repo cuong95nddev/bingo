@@ -42,9 +42,11 @@ export class BingoRoom extends Room {
       if (data.houseFeeMin != null) this.state.config.houseFeeMin = data.houseFeeMin;
       if (data.houseFeeMax != null) this.state.config.houseFeeMax = data.houseFeeMax;
       if (data.hackerEnabled != null) this.state.config.hackerEnabled = data.hackerEnabled;
+      if (data.hackerChance != null) this.state.config.hackerChance = Math.max(0, Math.min(100, Number(data.hackerChance)));
       if (data.hackerMin != null) this.state.config.hackerMin = data.hackerMin;
       if (data.hackerMax != null) this.state.config.hackerMax = data.hackerMax;
       if (data.jackpotEnabled != null) this.state.config.jackpotEnabled = data.jackpotEnabled;
+      if (data.jackpotChance != null) this.state.config.jackpotChance = Math.max(0, Math.min(100, Number(data.jackpotChance)));
       if (data.jackpotMin != null) this.state.config.jackpotMin = data.jackpotMin;
       if (data.jackpotMax != null) this.state.config.jackpotMax = data.jackpotMax;
       if (data.maxRounds != null) this.state.config.maxRounds = data.maxRounds;
@@ -160,11 +162,21 @@ export class BingoRoom extends Room {
     this.state.round.numbers.clear();
     this.state.round.id = ++this.roundId;
 
+    const duration = this.state.config.roundDuration;
+    const hackerAt = this.state.config.hackerEnabled && Math.random() * 100 < this.state.config.hackerChance
+      ? 1 + Math.floor(Math.random() * duration) : -1;
+    const jackpotAt = this.state.config.jackpotEnabled && Math.random() * 100 < this.state.config.jackpotChance
+      ? 1 + Math.floor(Math.random() * duration) : -1;
+
     // Countdown tick every second
-    let remaining = this.state.config.roundDuration;
+    let remaining = duration;
+    let tick = 0;
     this.roundTimer = setInterval(() => {
       remaining--;
+      tick++;
       this.state.round.countdown = remaining;
+      if (tick === hackerAt) this.triggerHacker();
+      if (tick === jackpotAt) this.triggerJackpot();
       if (remaining <= 0) {
         clearInterval(this.roundTimer);
         this.startDrawingPhase();
@@ -230,14 +242,6 @@ export class BingoRoom extends Room {
     this.state.history.push(hist);
     if (this.state.history.length > 50) {
       this.state.history.splice(0, 1);
-    }
-
-    // Random hacker/jackpot triggers
-    if (this.state.config.hackerEnabled && Math.random() < 0.2) {
-      this.triggerHacker();
-    }
-    if (this.state.config.jackpotEnabled && Math.random() < 0.15) {
-      this.triggerJackpot();
     }
 
     // After result display, move to highlight phase
