@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useIdentity } from "../hooks/useIdentity";
 import { useGame } from "../hooks/useGame";
+import { useBackgroundMusic } from "../hooks/useBackgroundMusic";
 import { NameModal } from "../components/NameModal";
 import { BettingPanel } from "../components/BettingPanel";
 import { ChatPanel } from "../components/ChatPanel";
@@ -60,6 +61,7 @@ function PlayerList({ players, mySessionId, compact = false }: { players: Map<st
 
 export function UserPage() {
   const { identity, needsName, saveName } = useIdentity();
+  const { playing: musicPlaying, toggle: toggleMusic, playBetSelect, playDiceReveal, playWin, playLose, playHacker, playJackpot } = useBackgroundMusic();
   const { state, connected, ticker, placeBet, jackpot, clearJackpot, hackerEvent, clearHackerEvent, joinDenied } = useGame(
     identity?.visitorId || "",
     identity?.name || "",
@@ -143,13 +145,32 @@ export function UserPage() {
     }
   }, [status, state?.round?.numbers, getWinOptions]);
 
+  const prevDiceCountRef = useRef(0);
+  useEffect(() => {
+    const count = state?.round?.numbers?.length ?? 0;
+    if (status === "drawing" && count > prevDiceCountRef.current && count > 0) {
+      playDiceReveal();
+    }
+    prevDiceCountRef.current = count;
+  }, [status, state?.round?.numbers?.length, playDiceReveal]);
+
   const myPlayer = state?.players.get(state.mySessionId);
+
+  useEffect(() => {
+    if (status === "result" && myPlayer) {
+      if (myPlayer.lastWin > 0) playWin();
+      else if (myPlayer.lastWin < 0) playLose();
+    }
+  }, [status, myPlayer?.lastWin, playWin, playLose]);
+
   const totalBet = stagedBets.reduce((s, b) => s + b.amount, 0);
   const playersCount = state?.players?.size ?? 0;
   const isBetting = status === "betting";
 
-  const stageBet = (bet: import("../types/game").GameBet) =>
+  const stageBet = (bet: import("../types/game").GameBet) => {
+    playBetSelect();
     setStagedBets((prev) => [...prev, bet]);
+  };
 
   const clearStaged = () => setStagedBets([]);
 
@@ -166,15 +187,17 @@ export function UserPage() {
 
   useEffect(() => {
     if (!hackerEvent) return;
+    playHacker();
     const timer = setTimeout(clearHackerEvent, 2000);
     return () => clearTimeout(timer);
-  }, [hackerEvent, clearHackerEvent]);
+  }, [hackerEvent, clearHackerEvent, playHacker]);
 
   useEffect(() => {
     if (!jackpot) return;
+    playJackpot();
     const timer = setTimeout(clearJackpot, 2000);
     return () => clearTimeout(timer);
-  }, [jackpot, clearJackpot]);
+  }, [jackpot, clearJackpot, playJackpot]);
 
   if (joinDenied) return (
     <div className="h-screen bg-[#071a09] flex items-center justify-center px-6">
@@ -238,10 +261,17 @@ export function UserPage() {
                 <path d="M12 8v4M12 16h.01" />
               </svg>
             </button>
-            <button className="text-white/50 hover:text-white transition-colors">
+            <button onClick={toggleMusic} className={`${musicPlaying ? "text-white" : "text-white/50"} hover:text-white transition-colors`}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                <path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" />
+                {musicPlaying ? (
+                  <>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                  </>
+                ) : (
+                  <line x1="23" y1="9" x2="17" y2="15" />
+                )}
               </svg>
             </button>
             {!connected && (
