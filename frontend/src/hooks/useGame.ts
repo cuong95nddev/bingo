@@ -34,20 +34,31 @@ export function useGame(visitorId: string, name: string, enabled: boolean) {
           roomRef.current = r;
           setConnected(true);
 
-          r.onStateChange((s: any) => {
-            const players = new Map<string, any>();
-            s.players.forEach((p: any, key: string) => {
+interface RawBet { type: string; value: number; amount: number; }
+interface RawPlayer { id: string; name: string; coins: number; lastWin: number; bets: Iterable<RawBet>; }
+interface RawHistory { id: number; numbers: Iterable<number>; timestamp: number; }
+interface RawState {
+  players: { forEach: (cb: (p: RawPlayer, key: string) => void) => void };
+  history: { forEach: (cb: (h: RawHistory) => void) => void };
+  round: { id: number; status: string; countdown: number; numbers: Iterable<number>; };
+  config: { startCoins: number; minBet: number; roundDuration: number; maxRounds: number; diceMax?: number; };
+}
+
+          r.onStateChange((state: unknown) => {
+            const s = state as RawState;
+            const players = new Map<string, import("../types/game").GamePlayer>();
+            s.players.forEach((p: RawPlayer, key: string) => {
               players.set(key, {
                 id: p.id,
                 name: p.name,
                 coins: p.coins,
                 lastWin: p.lastWin,
-                bets: [...p.bets].map((b: any) => ({ type: b.type, value: b.value, amount: b.amount })),
+                bets: [...p.bets].map((b: RawBet) => ({ type: b.type, value: b.value, amount: b.amount })),
               });
             });
 
-            const history: any[] = [];
-            s.history.forEach((h: any) => {
+            const history: Array<{ id: number; numbers: number[]; timestamp: number }> = [];
+            s.history.forEach((h: RawHistory) => {
               history.push({ id: h.id, numbers: [...h.numbers], timestamp: h.timestamp });
             });
 

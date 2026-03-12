@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useIdentity } from "../hooks/useIdentity";
 import { useGame } from "../hooks/useGame";
 import { NameModal } from "../components/NameModal";
 import { BettingPanel } from "../components/BettingPanel";
 import { computeThresholds } from "../utils/diceUtils";
 
-function PlayerList({ players, mySessionId, compact = false }: { players: Map<string, any>; mySessionId: string; compact?: boolean }) {
+function PlayerList({ players, mySessionId, compact = false }: { players: Map<string, import("../types/game").GamePlayer>; mySessionId: string; compact?: boolean }) {
   const sorted = [...players.entries()].sort((a, b) => b[1].coins - a[1].coins);
   return (
     <div className={compact ? "px-2 py-2" : "px-3 py-3"}>
@@ -78,14 +78,16 @@ export function UserPage() {
     restoredRef.current = true;
     const myPlayer = state.players.get(state.mySessionId);
     if (myPlayer && myPlayer.bets.length > 0 && state.round.status === "betting") {
-      setConfirmedBets(myPlayer.bets);
-      setConfirmed(true);
+      setTimeout(() => {
+        setConfirmedBets(myPlayer.bets);
+        setConfirmed(true);
+      }, 0);
     }
   }, [state]);
 
   const diceMax = state?.config?.diceMax ?? 6;
 
-  function getWinOptions(numbers: number[]): Set<string> {
+  const getWinOptions = useCallback((numbers: number[]): Set<string> => {
     if (numbers.length < 3) return new Set();
     const counts: Record<number, number> = {};
     for (const n of numbers) counts[n] = (counts[n] || 0) + 1;
@@ -103,18 +105,23 @@ export function UserPage() {
     if (thresholds.drawValues.includes(sum)) keys.add("draw:0");
     keys.add(`sum:${sum}`);
     return keys;
-  }
+  }, [diceMax]);
 
   useEffect(() => {
     if (status === "highlight" && state?.round?.numbers?.length === 3) {
-      setLastWinOptions(getWinOptions([...state.round.numbers]));
+      const numbers = [...state.round.numbers];
+      setTimeout(() => {
+        setLastWinOptions(getWinOptions(numbers));
+      }, 0);
     } else if (status === "drawing") {
-      setLastWinOptions(new Set());
-      setStagedBets([]);
-      setConfirmedBets([]);
-      setConfirmed(false);
+      setTimeout(() => {
+        setLastWinOptions(new Set());
+        setStagedBets([]);
+        setConfirmedBets([]);
+        setConfirmed(false);
+      }, 0);
     }
-  }, [status]);
+  }, [status, state?.round?.numbers, getWinOptions]);
 
   if (needsName) return <NameModal onSave={saveName} />;
 

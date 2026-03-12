@@ -533,9 +533,19 @@ export function AdminPage() {
           if (cancelled) { room.leave(); return; }
           roomRef.current = room;
 
-          room.onStateChange((s: any) => {
+interface RawPlayer { id: string; name: string; coins: number; }
+interface RawHistory { id: number; numbers: Iterable<number>; timestamp: number; }
+interface RawState {
+  players: { forEach: (cb: (p: RawPlayer, sessionId: string) => void) => void };
+  round: { status: string; countdown: number; id: number; numbers: Iterable<number>; };
+  config: Config;
+  history: { forEach: (cb: (h: RawHistory) => void) => void };
+}
+
+          room.onStateChange((state: unknown) => {
+            const s = state as RawState;
             const playerList: Player[] = [];
-            s.players.forEach((p: any, sessionId: string) => {
+            s.players.forEach((p: RawPlayer, sessionId: string) => {
               playerList.push({ sessionId, id: p.id, name: p.name, coins: p.coins });
             });
             setPlayers(playerList);
@@ -550,7 +560,7 @@ export function AdminPage() {
             });
 
             const hist: RoundHistory[] = [];
-            s.history.forEach((h: any) => {
+            s.history.forEach((h: RawHistory) => {
               hist.push({ id: h.id, numbers: [...h.numbers], timestamp: h.timestamp });
             });
             setHistory(hist.reverse());
