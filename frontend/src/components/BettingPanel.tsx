@@ -69,14 +69,13 @@ function GoldCircle({
 
 
 function PoolBadge({ amount, isFire, dark }: { amount: number; isFire: boolean; dark?: boolean }) {
-  if (amount <= 0) return null;
-  const display = amount >= 1000 ? `${Math.round(amount / 1000)}k` : String(amount);
+  const display = amount > 0 ? (amount >= 1000 ? `${Math.round(amount / 1000)}k` : String(amount)) : "";
   return (
-    <div className="flex items-center justify-between w-full px-0.5 pointer-events-none -mb-0.5">
+    <div className="flex items-center justify-between w-full px-0.5 pointer-events-none -mb-0.5 h-3">
       <span className="text-[8px] font-bold" style={{ color: dark ? "#5a3800" : "#d4a050" }}>
         {display}
       </span>
-      {isFire && <span className="text-[9px]">🔥</span>}
+      {isFire && amount > 0 && <span className="text-[9px]">🔥</span>}
     </div>
   );
 }
