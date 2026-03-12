@@ -68,12 +68,12 @@ function GoldCircle({
 
 
 
-function PoolBadge({ amount, isFire }: { amount: number; isFire: boolean }) {
+function PoolBadge({ amount, isFire, dark }: { amount: number; isFire: boolean; dark?: boolean }) {
   if (amount <= 0) return null;
   const display = amount >= 1000 ? `${Math.round(amount / 1000)}k` : String(amount);
   return (
     <div className="flex items-center justify-between w-full px-0.5 pointer-events-none -mb-0.5">
-      <span className="text-[8px] font-bold" style={{ color: "#d4a050" }}>
+      <span className="text-[8px] font-bold" style={{ color: dark ? "#5a3800" : "#d4a050" }}>
         {display}
       </span>
       {isFire && <span className="text-[9px]">🔥</span>}
@@ -126,6 +126,7 @@ function SumGrid({
               <PoolBadge
                 amount={betPool?.get(`sum:${n}`) ?? 0}
                 isFire={fireKeys.has(`sum:${n}`)}
+                dark
               />
               <span className="text-[15px] font-extrabold leading-none">{n}</span>
               <span className="text-[8px] mt-0.5 opacity-75 font-medium">{sumMult[n]}</span>
