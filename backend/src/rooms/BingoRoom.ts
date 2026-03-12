@@ -247,7 +247,7 @@ export class BingoRoom extends Room {
       this.state.round.numbers.push(n);
     }
 
-    await this.delay(1000);
+    await this.delay(2000);
     this.startResultPhase(numbers);
   }
 

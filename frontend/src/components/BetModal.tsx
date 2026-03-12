@@ -97,11 +97,11 @@ function Diamond({ amount }: { amount: number }) {
   );
 }
 
-const ROW1 = [0, 10, 20, 50, 100];
+const ROW1 = [10, 20, 50, 100];
 const ROW2 = [300, 500, 1000];
 
 export function BetModal({ betType, betValue, availableCoins, onConfirm, onClose, diceMax }: Props) {
-  const [amount, setAmount] = useState(0);
+  const [amount, setAmount] = useState(Math.min(ROW1[0], availableCoins));
 
   const thresholds = useMemo(() => computeThresholds(diceMax), [diceMax]);
   const sumPayouts = useMemo(() => computeSumPayouts(diceMax), [diceMax]);
@@ -226,7 +226,7 @@ export function BetModal({ betType, betValue, availableCoins, onConfirm, onClose
 
         {/* Preset amounts */}
         <div className="px-4 pt-2 pb-2 space-y-2">
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {ROW1.map((v) => (
               <button
                 key={v}

@@ -74,6 +74,8 @@ export function UserPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [stagedBets, setStagedBets] = useState<import("../types/game").GameBet[]>([]);
   const [confirmedBets, setConfirmedBets] = useState<import("../types/game").GameBet[]>([]);
+  const overlayBetsRef = useRef<import("../types/game").GameBet[]>([]);
+  const playerBetTotalsRef = useRef<Map<string, number>>(new Map());
   const [confirmed, setConfirmed] = useState(false);
   const restoredRef = useRef(false);
   // Persist last-round win options; cleared when next drawing starts
@@ -121,11 +123,26 @@ export function UserPage() {
         setLastWinOptions(getWinOptions(numbers));
       }, 0);
     } else if (status === "drawing") {
+      const mp = state?.players.get(state.mySessionId);
+      const serverBets = mp?.bets?.length ? [...mp.bets].filter(Boolean).map(b => ({ type: b.type, value: b.value, amount: b.amount })) : [];
+      if (overlayBetsRef.current.length === 0 && serverBets.length > 0) {
+        overlayBetsRef.current = serverBets;
+      }
+      const totals = new Map<string, number>();
+      state?.players.forEach((p, sid) => {
+        const total = [...p.bets].filter(Boolean).reduce((s, b) => s + b.amount, 0);
+        totals.set(sid, total);
+      });
+      if (totals.size > 0) playerBetTotalsRef.current = totals;
       setTimeout(() => {
         setLastWinOptions(new Set());
         setStagedBets([]);
-        setConfirmedBets([]);
         setConfirmed(false);
+      }, 0);
+    } else if (status === "betting") {
+      setTimeout(() => {
+        setConfirmedBets([]);
+        overlayBetsRef.current = [];
       }, 0);
     }
   }, [status, state?.round?.numbers, getWinOptions]);
@@ -143,6 +160,7 @@ export function UserPage() {
   const confirmBets = () => {
     for (const bet of stagedBets) placeBet(bet);
     setConfirmedBets(stagedBets);
+    overlayBetsRef.current = stagedBets;
     setStagedBets([]);
     setConfirmed(true);
   };
@@ -294,18 +312,16 @@ export function UserPage() {
                       className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm transition-all ${
                         state.round.numbers[i]
                           ? "opacity-100 scale-100"
-                          : status === "drawing"
-                          ? "opacity-30 scale-90"
-                          : "opacity-20"
+                          : "opacity-100 scale-100"
                       }`}
                       style={{
                         background: state.round.numbers[i]
                           ? "radial-gradient(circle at 35% 30%, #f5c842, #c8860a)"
-                          : "#2a4a2a",
+                          : "transparent",
                         color: "#2d1800",
                       }}
                     >
-                      {state.round.numbers[i] || "?"}
+                      {state.round.numbers[i] || <span className="dice-rolling text-base">🎲</span>}
                     </span>
                   ))}
                 </div>
@@ -594,103 +610,163 @@ export function UserPage() {
       {/* Drawing / Result overlay */}
       {state && overlayVisible && (
         <div
-          className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-0"
+          className="fixed inset-0 z-40 flex items-center justify-center px-4"
           style={{ background: "rgba(3, 9, 4, 0.96)", backdropFilter: "blur(2px)" }}
         >
-          {/* Round id */}
-          <div className="text-[10px] uppercase tracking-[0.25em] mb-8 px-3 py-1 rounded-full" style={{ color: "#3d6a4a", border: "1px solid #1a3d1a" }}>
-            Kỳ #{String(state.round.id).padStart(7, "0")}
-          </div>
+          <div className="flex items-start gap-6 max-w-[700px] w-full">
+            {/* Left: dice + sum + result */}
+            <div className="flex-1 flex flex-col items-center">
+              {/* Round id */}
+              <div className="text-[10px] uppercase tracking-[0.25em] mb-8 px-3 py-1 rounded-full" style={{ color: "#3d6a4a", border: "1px solid #1a3d1a" }}>
+                Kỳ #{String(state.round.id).padStart(7, "0")}
+              </div>
 
-          {/* Dice */}
-          <div className="flex gap-4 mb-5">
-            {[0, 1, 2].map((i) => {
-              const val = state.round.numbers[i];
-              return (
+              {/* Dice */}
+              <div className="flex gap-4 mb-5">
+                {[0, 1, 2].map((i) => {
+                  const val = state.round.numbers[i];
+                  return (
+                    <div
+                      key={i}
+                      className={`w-24 h-24 rounded-full flex items-center justify-center text-5xl font-black transition-all duration-500 ${
+                        val ? "scale-100 opacity-100" : "scale-100 opacity-80"
+                      }`}
+                      style={{
+                        background: val
+                          ? "radial-gradient(circle at 32% 28%, #fde068, #ca8a04)"
+                          : "#0e2510",
+                        color: val ? "#1a0a00" : "#2a5a2a",
+                        boxShadow: val
+                          ? "0 0 40px rgba(202,138,4,0.5), 0 8px 24px rgba(0,0,0,0.6), inset 0 2px 0 rgba(255,255,255,0.2)"
+                          : "inset 0 0 0 1.5px #1a3d1a",
+                      }}
+                    >
+                      {val || <span className="dice-rolling">🎲</span>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Sum + Nhỏ/Hòa/Lớn */}
+              {state.round.numbers.length === 3 && (() => {
+                const sum = state.round.numbers.reduce((a, b) => a + b, 0);
+                const thresholds = computeThresholds(diceMax);
+                const category = sum <= thresholds.smallMax ? "NHỎ" : sum >= thresholds.bigMin ? "LỚN" : "HÒA";
+                const categoryColor = category === "HÒA" ? "#d4a050" : "#4ade80";
+                return (
+                  <div
+                    className="flex items-center gap-4 px-6 py-3 rounded-2xl mb-5"
+                    style={{ background: "#0e2510", border: "1px solid #1a4a1a" }}
+                  >
+                    <span
+                      className="text-3xl font-black tracking-wider"
+                      style={{ color: categoryColor, textShadow: `0 0 16px ${categoryColor}60` }}
+                    >
+                      {category}
+                    </span>
+                    <span className="text-sm font-semibold" style={{ color: "#4a8a5a" }}>|</span>
+                    <span className="text-xs uppercase tracking-widest font-semibold" style={{ color: "#4a8a5a" }}>Tổng</span>
+                    <span className="text-2xl font-black" style={{ color: "#fbbf24" }}>
+                      {sum}
+                    </span>
+                  </div>
+                );
+              })()}
+
+              {/* Win / loss result */}
+              {status === "result" && myPlayer && myPlayer.lastWin > 0 && (
+                <div className="flex flex-col items-center gap-1">
+                  <div
+                    className="text-4xl font-black px-8 py-3 rounded-2xl"
+                    style={{
+                      background: "linear-gradient(135deg, #14532d, #166534)",
+                      color: "#4ade80",
+                      boxShadow: "0 0 32px rgba(74,222,128,0.25), 0 4px 16px rgba(0,0,0,0.4)",
+                      border: "1px solid #22c55e40",
+                    }}
+                  >
+                    +{myPlayer.lastWin.toLocaleString()} ngô
+                  </div>
+                  <span className="text-xs font-medium mt-1" style={{ color: "#4ade80" }}>Chúc mừng!</span>
+                </div>
+              )}
+              {status === "result" && myPlayer && myPlayer.lastWin < 0 && (
                 <div
-                  key={i}
-                  className={`w-24 h-24 rounded-3xl flex items-center justify-center text-5xl font-black transition-all duration-500 ${
-                    val ? "scale-100 opacity-100" : "scale-75 opacity-15"
-                  }`}
+                  className="text-3xl font-black px-8 py-3 rounded-2xl"
                   style={{
-                    background: val
-                      ? "radial-gradient(circle at 32% 28%, #fde068, #ca8a04)"
-                      : "#0e2510",
-                    color: val ? "#1a0a00" : "#2a5a2a",
-                    boxShadow: val
-                      ? "0 0 40px rgba(202,138,4,0.5), 0 8px 24px rgba(0,0,0,0.6), inset 0 2px 0 rgba(255,255,255,0.2)"
-                      : "inset 0 0 0 1.5px #1a3d1a",
+                    background: "linear-gradient(135deg, #450a0a, #7f1d1d)",
+                    color: "#f87171",
+                    boxShadow: "0 0 24px rgba(248,113,113,0.15), 0 4px 16px rgba(0,0,0,0.4)",
+                    border: "1px solid #ef444430",
                   }}
                 >
-                  {val || "?"}
+                  {myPlayer.lastWin.toLocaleString()} ngô
                 </div>
-              );
-            })}
-          </div>
-
-          {/* Sum */}
-          {state.round.numbers.length === 3 && (
-            <div
-              className="flex items-center gap-3 px-6 py-3 rounded-2xl mb-5"
-              style={{ background: "#0e2510", border: "1px solid #1a4a1a" }}
-            >
-              <span className="text-xs uppercase tracking-widest font-semibold" style={{ color: "#4a8a5a" }}>Tổng</span>
-              <span className="text-4xl font-black" style={{ color: "#fbbf24" }}>
-                {state.round.numbers.reduce((a, b) => a + b, 0)}
-              </span>
+              )}
             </div>
-          )}
 
-          {/* Status label */}
-          {status === "drawing" && (
-            <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "#fbbf24" }}>
-              <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-ping inline-block" />
-              Đang quay số...
-            </div>
-          )}
-
-          {/* Win / loss result */}
-          {status === "result" && myPlayer && myPlayer.lastWin > 0 && (
-            <div className="flex flex-col items-center gap-1">
-              <div
-                className="text-4xl font-black px-8 py-3 rounded-2xl"
-                style={{
-                  background: "linear-gradient(135deg, #14532d, #166534)",
-                  color: "#4ade80",
-                  boxShadow: "0 0 32px rgba(74,222,128,0.25), 0 4px 16px rgba(0,0,0,0.4)",
-                  border: "1px solid #22c55e40",
-                }}
-              >
-                +{myPlayer.lastWin.toLocaleString()} ngô
+            {/* Right: all players results */}
+            <div className="w-[220px] shrink-0 rounded-xl overflow-hidden" style={{ background: "#0e2510", border: "1px solid #1a4a1a" }}>
+              <div className="px-3 py-1.5 text-[10px] uppercase tracking-widest font-semibold" style={{ color: "#4a8a5a", borderBottom: "1px solid #1a3d1a" }}>
+                Người chơi
               </div>
-              <span className="text-xs font-medium mt-1" style={{ color: "#4ade80" }}>Chúc mừng!</span>
+              <div className="max-h-[320px] overflow-y-auto relative">
+                {[...state.players.entries()]
+                  .sort((a, b) => b[1].coins - a[1].coins)
+                  .map(([sid, p], i, arr) => {
+                    const isMe = sid === state.mySessionId;
+                    const betTotal = status === "drawing"
+                      ? [...p.bets].filter(Boolean).reduce((s, b) => s + b.amount, 0)
+                      : (playerBetTotalsRef.current.get(sid) ?? 0);
+                    const hasBets = betTotal > 0;
+                    const showResult = status === "result";
+                    return (
+                      <div
+                        key={sid}
+                        className="flex items-center gap-2 px-3 py-2 player-row"
+                        style={{
+                          borderBottom: i < arr.length - 1 ? "1px solid #122a14" : undefined,
+                          background: isMe ? "#0e2e14" : undefined,
+                        }}
+                      >
+                        <img src={p.avatar} className="w-6 h-6 rounded-full shrink-0" alt="" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1">
+                            <span
+                              className="text-xs font-semibold truncate"
+                              style={{ color: isMe ? "#4ade80" : "rgba(255,255,255,0.85)" }}
+                            >
+                              {p.name}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono" style={{ color: "#d4a050" }}>
+                              {p.coins.toLocaleString()} ngô
+                            </span>
+                            {hasBets && (
+                              <span className="text-[9px] font-mono" style={{ color: "#4a8a5a" }}>
+                                cược {betTotal.toLocaleString()}
+                              </span>
+                            )}
+                            {!hasBets && (
+                              <span className="text-[9px]" style={{ color: "#4a6a4a" }}>chưa cược</span>
+                            )}
+                          </div>
+                        </div>
+                        {showResult && p.lastWin !== 0 && (
+                          <span
+                            className="text-[11px] font-black shrink-0 result-fade-in"
+                            style={{ color: p.lastWin > 0 ? "#4ade80" : "#f87171" }}
+                          >
+                            {p.lastWin > 0 ? "+" : ""}{p.lastWin.toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
             </div>
-          )}
-          {status === "result" && myPlayer && myPlayer.lastWin < 0 && (
-            <div
-              className="text-3xl font-black px-8 py-3 rounded-2xl"
-              style={{
-                background: "linear-gradient(135deg, #450a0a, #7f1d1d)",
-                color: "#f87171",
-                boxShadow: "0 0 24px rgba(248,113,113,0.15), 0 4px 16px rgba(0,0,0,0.4)",
-                border: "1px solid #ef444430",
-              }}
-            >
-              {myPlayer.lastWin.toLocaleString()} ngô
-            </div>
-          )}
-          {status === "result" && myPlayer && myPlayer.lastWin === 0 && (
-            <div className="text-sm font-medium px-5 py-2 rounded-xl" style={{ background: "#0e2510", color: "#4a6a4a", border: "1px solid #1a3d1a" }}>
-              Không trúng lần này
-            </div>
-          )}
-
-          {/* Countdown until next round */}
-          {status === "result" && (
-            <div className="mt-8 text-[11px] tracking-widest uppercase" style={{ color: "#2a5a2a" }}>
-              Vòng tiếp theo sắp bắt đầu...
-            </div>
-          )}
+          </div>
         </div>
       )}
 
