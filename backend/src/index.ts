@@ -131,6 +131,13 @@ app.post("/api/admin/jackpot", adminAuth, (req, res) => {
   res.json({ ok: true, ...result });
 });
 
+app.delete("/api/admin/players/:sessionId", adminAuth, (req, res) => {
+  if (!bingoRoomRef) return res.status(404).json({ error: "No room" });
+  const kicked = bingoRoomRef.kickPlayer(req.params.sessionId);
+  if (!kicked) return res.status(404).json({ error: "Player not found" });
+  res.json({ ok: true });
+});
+
 app.get("/api/admin/history", adminAuth, (_req, res) => {
   if (!bingoRoomRef) return res.json([]);
   const history: object[] = [];

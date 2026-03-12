@@ -3,6 +3,7 @@ import { useIdentity } from "../hooks/useIdentity";
 import { useGame } from "../hooks/useGame";
 import { NameModal } from "../components/NameModal";
 import { BettingPanel } from "../components/BettingPanel";
+import { ChatPanel } from "../components/ChatPanel";
 import { computeThresholds } from "../utils/diceUtils";
 
 function PlayerList({ players, mySessionId, compact = false }: { players: Map<string, import("../types/game").GamePlayer>; mySessionId: string; compact?: boolean }) {
@@ -29,11 +30,18 @@ function PlayerList({ players, mySessionId, compact = false }: { players: Map<st
               <span className="text-[10px] font-mono w-4 shrink-0" style={{ color: rank < 3 ? "#d4a050" : "#2a5a3a" }}>
                 {rank + 1}
               </span>
-              <div
-                className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
-                style={{ background: "linear-gradient(135deg, #f97316, #dc2626)", color: "white" }}
-              >
-                {p.name.charAt(0).toUpperCase()}
+              <div className="relative shrink-0">
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
+                  style={{ background: "linear-gradient(135deg, #f97316, #dc2626)", color: "white" }}
+                >
+                  {p.name.charAt(0).toUpperCase()}
+                </div>
+                <span
+                  className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 ${
+                    p.online ? "bg-green-500 border-[#0a1e0d]" : "bg-gray-500 border-[#0a1e0d]"
+                  }`}
+                />
               </div>
               <span className="flex-1 text-sm font-medium truncate" style={{ color: isMe ? "#86c988" : "#7a9a7a" }}>
                 {p.name}{isMe && <span className="ml-1 text-[9px]" style={{ color: "#4a8a5a" }}>(bạn)</span>}
@@ -57,7 +65,7 @@ function formatTime(seconds: number) {
 
 export function UserPage() {
   const { identity, needsName, saveName } = useIdentity();
-  const { state, connected, ticker, placeBet, jackpot, clearJackpot, hackerEvent, clearHackerEvent } = useGame(
+  const { state, connected, ticker, placeBet, jackpot, clearJackpot, hackerEvent, clearHackerEvent, joinDenied } = useGame(
     identity?.visitorId || "",
     identity?.name || "",
     !!identity
@@ -123,8 +131,6 @@ export function UserPage() {
     }
   }, [status, state?.round?.numbers, getWinOptions]);
 
-  if (needsName) return <NameModal onSave={saveName} />;
-
   const myPlayer = state?.players.get(state.mySessionId);
   const totalBet = stagedBets.reduce((s, b) => s + b.amount, 0);
   const playersCount = state?.players?.size ?? 0;
@@ -157,19 +163,43 @@ export function UserPage() {
     return () => clearTimeout(timer);
   }, [jackpot, clearJackpot]);
 
+  if (joinDenied) return (
+    <div className="h-screen bg-[#071a09] flex items-center justify-center px-6">
+      <div className="text-center space-y-4 max-w-sm">
+        <div className="text-5xl">🚫</div>
+        <h2 className="text-xl font-bold text-white">Không thể tham gia</h2>
+        <p className="text-sm" style={{ color: "#86c988" }}>{joinDenied}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 px-6 py-2.5 rounded-full font-medium text-sm transition-all active:scale-95"
+          style={{ background: "linear-gradient(135deg, #dbb870, #c9960a)", color: "#3d2200" }}
+        >
+          Thử lại
+        </button>
+      </div>
+    </div>
+  );
+
+  if (needsName) return <NameModal onSave={saveName} />;
+
   return (
     <div className="h-screen bg-[#071a09] flex justify-center overflow-hidden">
-      {/* Left leaderboard — only visible when there's enough horizontal space */}
-      <div className="hidden lg:flex flex-col w-56 shrink-0 mr-2 my-4 rounded-xl overflow-hidden" style={{ background: "#0a1a0d", border: "1px solid #1a3d1a" }}>
-        <div className="px-3 py-2.5 shrink-0" style={{ borderBottom: "1px solid #1a3d1a" }}>
-          <span className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "#3d6a4a" }}>Bảng xếp hạng</span>
+      {/* Left sidebar — leaderboard + chat, only visible on lg+ */}
+      <div className="hidden lg:flex flex-col w-56 shrink-0 mr-2 my-4 gap-2">
+        <div className="rounded-xl overflow-hidden shrink-0" style={{ background: "#0a1a0d", border: "1px solid #1a3d1a" }}>
+          <div className="px-3 py-2.5 shrink-0" style={{ borderBottom: "1px solid #1a3d1a" }}>
+            <span className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "#3d6a4a" }}>Bảng xếp hạng</span>
+          </div>
+          <div className="overflow-y-auto max-h-[40vh]">
+            {state ? (
+              <PlayerList players={state.players} mySessionId={state.mySessionId} compact />
+            ) : (
+              <div className="flex items-center justify-center h-20 text-xs" style={{ color: "#2a4a2a" }}>Đang tải...</div>
+            )}
+          </div>
         </div>
-        <div className="overflow-y-auto flex-1">
-          {state ? (
-            <PlayerList players={state.players} mySessionId={state.mySessionId} compact />
-          ) : (
-            <div className="flex items-center justify-center h-20 text-xs" style={{ color: "#2a4a2a" }}>Đang tải...</div>
-          )}
+        <div className="rounded-xl overflow-hidden flex-1 min-h-0" style={{ background: "#0a1a0d", border: "1px solid #1a3d1a" }}>
+          <ChatPanel messages={ticker} />
         </div>
       </div>
 
@@ -208,18 +238,10 @@ export function UserPage() {
         </header>
 
 
-        {/* Win ticker */}
-        {ticker.length > 0 && (
-          <div className="marquee-track shrink-0" style={{ background: "#061508", borderBottom: "1px solid #1a3d1a", height: 28 }}>
-            <div className="marquee-inner h-full items-center">
-              {[...ticker, ...ticker].map((msg, i) => (
-                <span key={i} className="inline-flex items-center px-6 text-xs font-semibold" style={{ color: "#f5c842" }}>
-                  {msg}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Chat panel for mobile (below header) — only on small screens */}
+        <div className="lg:hidden shrink-0 max-h-28 overflow-y-auto" style={{ background: "#0a1a0d", borderBottom: "1px solid #1a3d1a" }}>
+          <ChatPanel messages={ticker} />
+        </div>
 
         {/* Round info bar */}
         {state && (
@@ -403,6 +425,19 @@ export function UserPage() {
                       }}>
                         {rank + 1}
                       </span>
+                      <div className="relative shrink-0">
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                          style={{ background: "linear-gradient(135deg, #f97316, #dc2626)", color: "white" }}
+                        >
+                          {p.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span
+                          className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 ${
+                            p.online ? "bg-green-500 border-[#0a1e0d]" : "bg-gray-500 border-[#0a1e0d]"
+                          }`}
+                        />
+                      </div>
                       <span className="flex-1 font-medium truncate" style={{ color: isMe ? "#86c988" : "#7a9a7a" }}>
                         {p.name} {isMe && "(bạn)"}
                       </span>
@@ -500,11 +535,18 @@ export function UserPage() {
         {/* Bottom info bar */}
         {status !== "finished" && <div className="bg-[#061508] px-4 py-2.5 flex items-center justify-between shrink-0" style={{ borderTop: "1px solid #1a3d1a" }}>
           <div className="flex items-center gap-2.5">
-            <div
-              className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
-              style={{ background: "linear-gradient(135deg, #f97316, #dc2626)" }}
-            >
-              {myPlayer?.name?.charAt(0)?.toUpperCase() ?? "?"}
+            <div className="relative shrink-0">
+              <div
+                className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold"
+                style={{ background: "linear-gradient(135deg, #f97316, #dc2626)" }}
+              >
+                {myPlayer?.name?.charAt(0)?.toUpperCase() ?? "?"}
+              </div>
+              <span
+                className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 ${
+                  connected ? "bg-green-500 border-[#061508]" : "bg-gray-500 border-[#061508]"
+                }`}
+              />
             </div>
             <div>
               <div className="font-bold text-sm text-white leading-tight">{myPlayer?.name ?? "—"}</div>

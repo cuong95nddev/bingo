@@ -24,6 +24,19 @@ export function Leaderboard({ players, mySessionId }: Props) {
           >
             <div className="flex items-center gap-2">
               <span className="text-gray-500 w-5 text-sm">{i + 1}</span>
+              <div className="relative shrink-0">
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
+                  style={{ background: "linear-gradient(135deg, #f97316, #dc2626)", color: "white" }}
+                >
+                  {p.name.charAt(0).toUpperCase()}
+                </div>
+                <span
+                  className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 ${
+                    p.online ? "bg-green-500 border-gray-800" : "bg-gray-500 border-gray-800"
+                  }`}
+                />
+              </div>
               <span className={`text-sm ${p.sessionId === mySessionId ? "text-blue-300 font-bold" : "text-white"}`}>
                 {p.name}
               </span>

@@ -26,6 +26,16 @@ export class BingoRoom extends Room {
   state = new BingoState();
   private roundTimer?: NodeJS.Timeout;
   private roundId = 0;
+  private tickerHistory: string[] = [];
+
+  private broadcastTicker(msg: string) {
+    const now = new Date();
+    const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const stamped = `[${time}] ${msg}`;
+    this.tickerHistory.push(stamped);
+    if (this.tickerHistory.length > 50) this.tickerHistory.shift();
+    this.broadcast("ticker", stamped);
+  }
 
   onCreate(_options: { adminPassword?: string }) {
     this.autoDispose = false;
@@ -73,7 +83,7 @@ export class BingoRoom extends Room {
       player.bets.push(bet);
       player.coins -= amount;
 
-      this.broadcast("ticker", `${player.name} cược ${amount.toLocaleString("vi-VN")} ngô → ${betLabel(data.type, data.value)}`);
+      this.broadcastTicker( `${player.name} cược ${amount.toLocaleString("vi-VN")} ngô → ${betLabel(data.type, data.value)}`);
     });
 
     this.onMessage("clearBets", (client) => {
@@ -106,12 +116,19 @@ export class BingoRoom extends Room {
       if (p.id === options.visitorId) existing = p;
     });
 
+    // Block new players from joining once the game has started
+    if (!existing && this.state.round.status !== "waiting") {
+      client.leave(4003);
+      return;
+    }
+
     if (existing) {
       // Remove old sessionId entry, remap to new session
       this.state.players.forEach((_p, key) => {
         if (_p === existing) this.state.players.delete(key);
       });
       this.state.players.set(client.sessionId, existing);
+      existing.online = true;
     } else {
       const player = new Player();
       player.id = options.visitorId;
@@ -119,11 +136,38 @@ export class BingoRoom extends Room {
       player.coins = this.state.config.startCoins;
       this.state.players.set(client.sessionId, player);
     }
+
+    // Send ticker history so the client doesn't lose notifications on refresh
+    if (this.tickerHistory.length > 0) {
+      client.send("tickerHistory", this.tickerHistory);
+    }
+
+    const joinedName = existing ? existing.name : (options.name || "Player");
+    this.broadcastTicker(`📥 ${joinedName} đã tham gia`);
   }
 
   onLeave(client: Client, _code?: number) {
     this.adminSessions.delete(client.sessionId);
-    // Keep player state for reconnect — do NOT delete
+    const player = this.state.players.get(client.sessionId);
+    if (player) {
+      player.online = false;
+      this.broadcastTicker(`📤 ${player.name} đã rời phòng`);
+    }
+  }
+
+  kickPlayer(sessionId: string): boolean {
+    const player = this.state.players.get(sessionId);
+    if (!player) return false;
+    const visitorId = player.id;
+    this.state.players.delete(sessionId);
+    for (const client of this.clients) {
+      if (client.sessionId === sessionId) {
+        client.send("kicked", { visitorId });
+        client.leave(4002);
+        break;
+      }
+    }
+    return true;
   }
 
   startGame(): boolean {
@@ -144,6 +188,7 @@ export class BingoRoom extends Room {
       this.roundTimer = undefined;
     }
     this.roundId = 0;
+    this.tickerHistory = [];
     this.state.round.status = "waiting";
     this.state.round.countdown = 0;
     this.state.round.numbers.clear();
@@ -219,7 +264,7 @@ export class BingoRoom extends Room {
         player.coins = Math.max(0, player.coins - fee);
         player.lastWin = -fee;
         player.bets = new ArraySchema<Bet>();
-        this.broadcast("ticker", `🏦 ${player.name} bị thu phí ${fee.toLocaleString("vi-VN")} ngô (không cược)`);
+        this.broadcastTicker( `🏦 ${player.name} bị thu phí ${fee.toLocaleString("vi-VN")} ngô (không cược)`);
         return;
       }
 
@@ -228,9 +273,9 @@ export class BingoRoom extends Room {
       player.bets = new ArraySchema<Bet>();
 
       if (delta > 0) {
-        this.broadcast("ticker", `★ ${player.name} THẮNG +${delta.toLocaleString("vi-VN")} ngô`);
+        this.broadcastTicker( `★ ${player.name} THẮNG +${delta.toLocaleString("vi-VN")} ngô`);
       } else if (delta < 0) {
-        this.broadcast("ticker", `✗ ${player.name} thua ${delta.toLocaleString("vi-VN")} ngô`);
+        this.broadcastTicker( `✗ ${player.name} thua ${delta.toLocaleString("vi-VN")} ngô`);
       }
     });
 

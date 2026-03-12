@@ -4,6 +4,7 @@ export interface GamePlayer {
   coins: number;
   lastWin: number;
   bets: GameBet[];
+  online: boolean;
 }
 
 export interface GameBet {

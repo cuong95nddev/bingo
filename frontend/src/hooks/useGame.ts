@@ -11,6 +11,7 @@ export function useGame(visitorId: string, name: string, enabled: boolean) {
   const [ticker, setTicker] = useState<string[]>([]);
   const [jackpot, setJackpot] = useState<{ total: number; perPlayer: number; playerCount: number } | null>(null);
   const [hackerEvent, setHackerEvent] = useState<{ victims: { name: string; amount: number }[] } | null>(null);
+  const [joinDenied, setJoinDenied] = useState<string | null>(null);
   const roomRef = useRef<Room | null>(null);
 
   useEffect(() => {
@@ -35,7 +36,7 @@ export function useGame(visitorId: string, name: string, enabled: boolean) {
           setConnected(true);
 
 interface RawBet { type: string; value: number; amount: number; }
-interface RawPlayer { id: string; name: string; coins: number; lastWin: number; bets: Iterable<RawBet>; }
+interface RawPlayer { id: string; name: string; coins: number; lastWin: number; bets: Iterable<RawBet>; online: boolean; }
 interface RawHistory { id: number; numbers: Iterable<number>; timestamp: number; }
 interface RawState {
   players: { forEach: (cb: (p: RawPlayer, key: string) => void) => void };
@@ -54,6 +55,7 @@ interface RawState {
                 coins: p.coins,
                 lastWin: p.lastWin,
                 bets: [...p.bets].map((b: RawBet) => ({ type: b.type, value: b.value, amount: b.amount })),
+                online: p.online ?? false,
               });
             });
 
@@ -86,6 +88,10 @@ interface RawState {
             setTicker((prev) => [...prev, msg].slice(-50));
           });
 
+          r.onMessage("tickerHistory", (msgs: string[]) => {
+            setTicker(msgs.slice(-50));
+          });
+
           r.onMessage("jackpot", (data: { total: number; perPlayer: number; playerCount: number }) => {
             setJackpot(data);
           });
@@ -94,10 +100,26 @@ interface RawState {
             setHackerEvent(data);
           });
 
+          r.onMessage("kicked", (data: { visitorId: string }) => {
+            const stored = localStorage.getItem("bingo_identity");
+            if (stored) {
+              const all = JSON.parse(stored) as Record<string, string>;
+              delete all[data.visitorId];
+              localStorage.setItem("bingo_identity", JSON.stringify(all));
+            }
+            window.location.reload();
+          });
+
           r.onLeave(() => setConnected(false));
         })
         .catch((err: unknown) => {
-          if (!cancelled) console.error("Failed to join room:", err);
+          if (cancelled) return;
+          const code = (err as { code?: number }).code;
+          if (code === 4003) {
+            setJoinDenied("Game đã bắt đầu, không thể tham gia.");
+          } else {
+            console.error("Failed to join room:", err);
+          }
         });
     }, 150);
 
@@ -120,5 +142,5 @@ interface RawState {
   const clearJackpot = useCallback(() => setJackpot(null), []);
   const clearHackerEvent = useCallback(() => setHackerEvent(null), []);
 
-  return { state, connected, ticker, placeBet, clearBets, jackpot, clearJackpot, hackerEvent, clearHackerEvent };
+  return { state, connected, ticker, placeBet, clearBets, jackpot, clearJackpot, hackerEvent, clearHackerEvent, joinDenied };
 }
