@@ -33,6 +33,7 @@ export interface GameState {
   players: Map<string, GamePlayer>;
   round: GameRound;
   config: GameConfig;
+  betPool: Map<string, number>;
   history: Array<{ id: number; numbers: number[]; timestamp: number }>;
   mySessionId: string;
 }

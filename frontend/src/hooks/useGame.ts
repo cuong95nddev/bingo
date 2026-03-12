@@ -40,6 +40,7 @@ interface RawPlayer { id: string; name: string; avatar: string; coins: number; l
 interface RawHistory { id: number; numbers: Iterable<number>; timestamp: number; }
 interface RawState {
   players: { forEach: (cb: (p: RawPlayer, key: string) => void) => void };
+  betPool: { forEach: (cb: (val: number, key: string) => void) => void };
   history: { forEach: (cb: (h: RawHistory) => void) => void };
   round: { id: number; status: string; countdown: number; numbers: Iterable<number>; };
   config: { startCoins: number; minBet: number; roundDuration: number; maxRounds: number; diceMax?: number; };
@@ -65,8 +66,14 @@ interface RawState {
               history.push({ id: h.id, numbers: [...h.numbers], timestamp: h.timestamp });
             });
 
+            const betPool = new Map<string, number>();
+            s.betPool.forEach((val: number, key: string) => {
+              betPool.set(key, val);
+            });
+
             setState({
               players,
+              betPool,
               round: {
                 id: s.round.id,
                 status: s.round.status as "waiting" | "betting" | "drawing" | "result" | "highlight" | "finished",
