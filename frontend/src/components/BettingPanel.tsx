@@ -167,7 +167,7 @@ function TripleSection({
         <QuestionBadge />
       </div>
       <div className="px-2">
-        <div className="rounded-xl p-2 flex gap-1.5" style={{ background: "#0e2510" }}>
+        <div className="rounded-xl pt-4 px-2 pb-2 flex gap-1.5" style={{ background: "#0e2510" }}>
           {items.map(({ label, value }) => {
             const active = hasBet("triple", value);
             const win = isWin("triple", value);
@@ -208,7 +208,7 @@ function DoubleSection({
         <QuestionBadge />
       </div>
       <div className="px-2">
-        <div className="rounded-xl p-2 flex gap-1.5" style={{ background: "#0e2510" }}>
+        <div className="rounded-xl pt-4 px-2 pb-2 flex gap-1.5" style={{ background: "#0e2510" }}>
           {numbers.map((n) => {
             const active = hasBet("double", n);
             const win = isWin("double", n);
@@ -252,7 +252,7 @@ function SingleSection({
         <QuestionBadge />
       </div>
       <div className="px-2">
-        <div className="rounded-xl p-2 flex gap-1.5" style={{ background: "#0e2510" }}>
+        <div className="rounded-xl pt-4 px-2 pb-2 flex gap-1.5" style={{ background: "#0e2510" }}>
           {numbers.map((n) => {
             const active = hasBet("single", n);
             const win = isWin("single", n);
@@ -352,7 +352,7 @@ export function BettingPanel({
       <SectionHeader>Cộng tổng</SectionHeader>
 
         {/* Big / Draw / Small buttons */}
-        <div className="px-2 pb-1">
+        <div className="px-2 pb-1 pt-3">
           <div className="flex gap-1.5">
             {[
               { type: "small", label: "NHỎ", sub: `3-${thresholds.smallMax}`, mult: "x1.5" },
