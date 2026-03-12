@@ -71,7 +71,7 @@ function GoldCircle({
 function PoolBadge({ amount, isFire, dark }: { amount: number; isFire: boolean; dark?: boolean }) {
   const display = amount > 0 ? (amount >= 1000 ? `${Math.round(amount / 1000)}k` : String(amount)) : "";
   return (
-    <div className="flex items-center justify-between w-full px-0.5 pointer-events-none -mb-0.5 h-3">
+    <div className="flex items-center justify-between w-full px-0.5 pointer-events-none h-3">
       <span className="text-[8px] font-bold" style={{ color: dark ? "#5a3800" : "#d4a050" }}>
         {display}
       </span>
@@ -129,6 +129,7 @@ function SumGrid({
               />
               <span className="text-[15px] font-extrabold leading-none">{n}</span>
               <span className="text-[8px] mt-0.5 opacity-75 font-medium">{sumMult[n]}</span>
+              <div className="h-3" />
             </button>
           ))}
         </div>
@@ -175,6 +176,7 @@ function TripleSection({
                 <GoldCircle label={label} size="md" active={active} />
                 <GoldCircle label={label} size="md" active={active} />
                 <GoldCircle label={label} size="md" active={active} />
+                <div className="h-3" />
               </button>
             );
           })}
@@ -215,6 +217,7 @@ function DoubleSection({
                 />
                 <GoldCircle label={n} size="md" active={active} />
                 <GoldCircle label={n} size="md" active={active} />
+                <div className="h-3" />
               </button>
             );
           })}
@@ -258,6 +261,7 @@ function SingleSection({
                   isFire={fireKeys.has(`single:${n}`)}
                 />
                 <GoldCircle label={n} size="lg" active={active} />
+                <div className="h-3" />
               </button>
             );
           })}
@@ -399,6 +403,7 @@ export function BettingPanel({
         <TripleSection numbers={numbers} hasBet={hasBet} isWin={isWin} selectBet={selectBet} disabled={disabled} betPool={betPool} fireKeys={fireKeys} />
         <DoubleSection numbers={numbers} hasBet={hasBet} isWin={isWin} selectBet={selectBet} disabled={disabled} betPool={betPool} fireKeys={fireKeys} />
         <SingleSection numbers={numbers} hasBet={hasBet} isWin={isWin} selectBet={selectBet} disabled={disabled} betPool={betPool} fireKeys={fireKeys} />
+        <div className="h-4" />
       </>
     );
 }
