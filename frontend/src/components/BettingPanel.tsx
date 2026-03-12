@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { GameBet, GameConfig } from "../types/game";
 import { BetModal } from "./BetModal";
 import { diceNumbers, computeSumPayoutsDisplay, computeThresholds } from "../utils/diceUtils";
@@ -93,12 +93,12 @@ function SumGrid({
               key={n}
               onClick={() => selectBet("sum", n)}
               disabled={disabled}
-              className="flex flex-col items-center py-1.5 rounded-sm transition-all active:scale-95 disabled:opacity-60"
+              className={`flex flex-col items-center py-1.5 rounded-sm transition-all active:scale-95 ${isWin("sum", n) ? "win-highlight" : ""}`}
               style={
                 hasBet("sum", n)
                   ? { background: "#22c55e", color: "white" }
                   : isWin("sum", n)
-                  ? { background: "linear-gradient(180deg, #fbbf24 0%, #d97706 100%)", color: "#1a0a00", boxShadow: "0 0 12px rgba(245,158,11,0.8), 0 0 3px rgba(255,220,100,0.5)" }
+                  ? { background: "linear-gradient(180deg, #fbbf24 0%, #d97706 100%)", color: "#1a0a00" }
                   : {
                       background: "linear-gradient(180deg, #dab870 0%, #b8901a 100%)",
                       color: "#2d1800",
@@ -116,7 +116,6 @@ function SumGrid({
 }
 
 const WIN_BG = "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)";
-const WIN_SHADOW = "0 0 16px rgba(245,158,11,0.7), 0 0 4px rgba(255,220,100,0.5)";
 
 function TripleSection({
   numbers, hasBet, isWin, selectBet, disabled,
@@ -144,8 +143,8 @@ function TripleSection({
                 key={value}
                 onClick={() => !disabled && selectBet("triple", value)}
                 disabled={disabled}
-                className="flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-all active:scale-95 disabled:opacity-50"
-                style={{ background: active ? "#1a5a28" : win ? WIN_BG : "#162e1a", boxShadow: win ? WIN_SHADOW : undefined }}
+                className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-all active:scale-95 ${win ? "win-highlight" : ""}`}
+                style={{ background: active ? "#1a5a28" : win ? WIN_BG : "#162e1a" }}
               >
                 <GoldCircle label={label} size="md" active={active} />
                 <GoldCircle label={label} size="md" active={active} />
@@ -181,8 +180,8 @@ function DoubleSection({
                 key={n}
                 onClick={() => !disabled && selectBet("double", n)}
                 disabled={disabled}
-                className="flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-all active:scale-95 disabled:opacity-50"
-                style={{ background: active ? "#1a5a28" : win ? WIN_BG : "#162e1a", boxShadow: win ? WIN_SHADOW : undefined }}
+                className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-all active:scale-95 ${win ? "win-highlight" : ""}`}
+                style={{ background: active ? "#1a5a28" : win ? WIN_BG : "#162e1a" }}
               >
                 <GoldCircle label={n} size="md" active={active} />
                 <GoldCircle label={n} size="md" active={active} />
@@ -221,8 +220,8 @@ function SingleSection({
                 key={n}
                 onClick={() => !disabled && selectBet("single", n)}
                 disabled={disabled}
-                className="flex-1 flex flex-col items-center justify-center py-2.5 rounded-lg transition-all active:scale-95 disabled:opacity-50"
-                style={{ background: active ? "#1a5a28" : win ? WIN_BG : "#162e1a", boxShadow: win ? WIN_SHADOW : undefined }}
+                className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-lg transition-all active:scale-95 ${win ? "win-highlight" : ""}`}
+                style={{ background: active ? "#1a5a28" : win ? WIN_BG : "#162e1a" }}
               >
                 <GoldCircle label={n} size="lg" active={active} />
               </button>
@@ -243,6 +242,10 @@ export function BettingPanel({
   winOptions = new Set(),
 }: Props) {
   const [pendingBet, setPendingBet] = useState<{ type: string; value: number } | null>(null);
+
+  useEffect(() => {
+    if (disabled) setPendingBet(null);
+  }, [disabled]);
 
   const diceMax = config.diceMax ?? 6;
   const numbers = useMemo(() => diceNumbers(diceMax), [diceMax]);
@@ -307,12 +310,12 @@ export function BettingPanel({
                 key={type}
                 onClick={() => selectBet(type, 0)}
                 disabled={disabled}
-                className="flex-1 py-4 rounded-xl flex flex-col items-center gap-0.5 transition-all disabled:opacity-50 active:scale-95"
+                className={`flex-1 py-4 rounded-xl flex flex-col items-center gap-0.5 transition-all active:scale-95 ${isWin(type, 0) ? "win-highlight" : ""}`}
                 style={
                   hasBet(type, 0)
                     ? { background: "#22c55e", color: "#061508" }
                     : isWin(type, 0)
-                    ? { background: WIN_BG, color: "#1a0800", boxShadow: WIN_SHADOW }
+                    ? { background: WIN_BG, color: "#1a0800" }
                     : { background: "#0e2510", color: "white", border: "1px solid #1a4a20" }
                 }
               >
