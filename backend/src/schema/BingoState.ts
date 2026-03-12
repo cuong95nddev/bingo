@@ -14,4 +14,5 @@ export class BingoState extends Schema {
   @type(RoundState) round = new RoundState();
   @type(GameConfig) config = new GameConfig();
   @type([RoundHistory]) history = new ArraySchema<RoundHistory>();
+  @type({ map: "number" }) betPool = new MapSchema<number>();
 }

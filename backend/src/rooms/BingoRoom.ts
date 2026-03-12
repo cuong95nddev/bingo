@@ -83,6 +83,10 @@ export class BingoRoom extends Room {
       player.bets.push(bet);
       player.coins -= amount;
 
+      const poolKey = `${data.type}:${data.value}`;
+      const current = this.state.betPool.get(poolKey) ?? 0;
+      this.state.betPool.set(poolKey, current + amount);
+
       this.broadcastTicker( `${player.name} cược ${amount.toLocaleString("vi-VN")} ngô → ${betLabel(data.type, data.value)}`);
     });
 
@@ -91,6 +95,9 @@ export class BingoRoom extends Room {
       const player = this.state.players.get(client.sessionId);
       if (!player) return;
       for (const bet of player.bets) {
+        const poolKey = `${bet.type}:${bet.value}`;
+        const current = this.state.betPool.get(poolKey) ?? 0;
+        this.state.betPool.set(poolKey, Math.max(0, current - bet.amount));
         player.coins += bet.amount;
       }
       player.bets = new ArraySchema<Bet>();
@@ -197,6 +204,7 @@ export class BingoRoom extends Room {
     this.state.round.numbers.clear();
     this.state.round.id = 0;
     this.state.history.clear();
+    this.state.betPool.clear();
     this.state.players.forEach((player) => {
       player.coins = this.state.config.startCoins;
       player.lastWin = 0;
@@ -209,6 +217,7 @@ export class BingoRoom extends Room {
     this.state.round.countdown = this.state.config.roundDuration;
     this.state.round.numbers.clear();
     this.state.round.id = ++this.roundId;
+    this.state.betPool.clear();
 
     const duration = this.state.config.roundDuration;
     const hackerAt = this.state.config.hackerEnabled && Math.random() * 100 < this.state.config.hackerChance
