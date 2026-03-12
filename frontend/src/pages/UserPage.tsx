@@ -31,12 +31,11 @@ function PlayerList({ players, mySessionId, compact = false }: { players: Map<st
                 {rank + 1}
               </span>
               <div className="relative shrink-0">
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
-                  style={{ background: "linear-gradient(135deg, #f97316, #dc2626)", color: "white" }}
-                >
-                  {p.name.charAt(0).toUpperCase()}
-                </div>
+                <img
+                  src={p.avatar || `https://api.dicebear.com/9.x/thumbs/svg?seed=${encodeURIComponent(p.id)}`}
+                  alt={p.name}
+                  className="w-6 h-6 rounded-full bg-gray-700"
+                />
                 <span
                   className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 ${
                     p.online ? "bg-green-500 border-[#0a1e0d]" : "bg-gray-500 border-[#0a1e0d]"
@@ -426,12 +425,11 @@ export function UserPage() {
                         {rank + 1}
                       </span>
                       <div className="relative shrink-0">
-                        <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                          style={{ background: "linear-gradient(135deg, #f97316, #dc2626)", color: "white" }}
-                        >
-                          {p.name.charAt(0).toUpperCase()}
-                        </div>
+                        <img
+                          src={p.avatar || `https://api.dicebear.com/9.x/thumbs/svg?seed=${encodeURIComponent(p.id)}`}
+                          alt={p.name}
+                          className="w-8 h-8 rounded-full bg-gray-700"
+                        />
                         <span
                           className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 ${
                             p.online ? "bg-green-500 border-[#0a1e0d]" : "bg-gray-500 border-[#0a1e0d]"
@@ -536,12 +534,11 @@ export function UserPage() {
         {status !== "finished" && <div className="bg-[#061508] px-4 py-2.5 flex items-center justify-between shrink-0" style={{ borderTop: "1px solid #1a3d1a" }}>
           <div className="flex items-center gap-2.5">
             <div className="relative shrink-0">
-              <div
-                className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold"
-                style={{ background: "linear-gradient(135deg, #f97316, #dc2626)" }}
-              >
-                {myPlayer?.name?.charAt(0)?.toUpperCase() ?? "?"}
-              </div>
+              <img
+                src={myPlayer?.avatar || `https://api.dicebear.com/9.x/thumbs/svg?seed=default`}
+                alt={myPlayer?.name ?? "?"}
+                className="w-9 h-9 rounded-full bg-gray-700"
+              />
               <span
                 className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 ${
                   connected ? "bg-green-500 border-[#061508]" : "bg-gray-500 border-[#061508]"

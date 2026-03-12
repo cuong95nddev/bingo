@@ -1,6 +1,7 @@
 export interface GamePlayer {
   id: string;
   name: string;
+  avatar: string;
   coins: number;
   lastWin: number;
   bets: GameBet[];

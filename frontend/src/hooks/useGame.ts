@@ -36,7 +36,7 @@ export function useGame(visitorId: string, name: string, enabled: boolean) {
           setConnected(true);
 
 interface RawBet { type: string; value: number; amount: number; }
-interface RawPlayer { id: string; name: string; coins: number; lastWin: number; bets: Iterable<RawBet>; online: boolean; }
+interface RawPlayer { id: string; name: string; avatar: string; coins: number; lastWin: number; bets: Iterable<RawBet>; online: boolean; }
 interface RawHistory { id: number; numbers: Iterable<number>; timestamp: number; }
 interface RawState {
   players: { forEach: (cb: (p: RawPlayer, key: string) => void) => void };
@@ -52,6 +52,7 @@ interface RawState {
               players.set(key, {
                 id: p.id,
                 name: p.name,
+                avatar: p.avatar ?? "",
                 coins: p.coins,
                 lastWin: p.lastWin,
                 bets: [...p.bets].map((b: RawBet) => ({ type: b.type, value: b.value, amount: b.amount })),

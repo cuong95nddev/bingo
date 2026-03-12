@@ -25,7 +25,7 @@ import {
 const API = "/api/admin";
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "ws://localhost:2567";
 
-interface Player { sessionId: string; id: string; name: string; coins: number; online: boolean }
+interface Player { sessionId: string; id: string; name: string; avatar: string; coins: number; online: boolean }
 interface Config { startCoins: number; minBet: number; roundDuration: number; maxRounds: number; diceMax: number; houseFeeEnabled: boolean; houseFeeMin: number; houseFeeMax: number; hackerEnabled: boolean; hackerChance: number; hackerMin: number; hackerMax: number; jackpotEnabled: boolean; jackpotChance: number; jackpotMin: number; jackpotMax: number }
 interface RoundHistory { id: number; numbers: number[]; timestamp: number }
 interface StatusResponse { status: string; countdown: number; roundId: number; numbers: number[]; maxRounds: number; diceMax: number }
@@ -350,12 +350,11 @@ function PlayersSection({ players, giftAmount, setGiftAmount, handleGiftCoins, h
               <td className="py-3 px-5">
                 <div className="flex items-center gap-3">
                   <div className="relative shrink-0">
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                      style={{ background: "linear-gradient(135deg, #f97316, #dc2626)", color: "white" }}
-                    >
-                      {p.name.charAt(0).toUpperCase()}
-                    </div>
+                    <img
+                      src={p.avatar || `https://api.dicebear.com/9.x/thumbs/svg?seed=${encodeURIComponent(p.id)}`}
+                      alt={p.name}
+                      className="w-8 h-8 rounded-full bg-[#2c2e33]"
+                    />
                     <span
                       className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 ${
                         p.online ? "bg-[#30a46c] border-[#25262b]" : "bg-[#6b7280] border-[#25262b]"
@@ -539,7 +538,7 @@ export function AdminPage() {
           if (cancelled) { room.leave(); return; }
           roomRef.current = room;
 
-interface RawPlayer { id: string; name: string; coins: number; online: boolean; }
+interface RawPlayer { id: string; name: string; avatar: string; coins: number; online: boolean; }
 interface RawHistory { id: number; numbers: Iterable<number>; timestamp: number; }
 interface RawState {
   players: { forEach: (cb: (p: RawPlayer, sessionId: string) => void) => void };
@@ -552,7 +551,7 @@ interface RawState {
             const s = state as RawState;
             const playerList: Player[] = [];
             s.players.forEach((p: RawPlayer, sessionId: string) => {
-              playerList.push({ sessionId, id: p.id, name: p.name, coins: p.coins, online: p.online ?? false });
+              playerList.push({ sessionId, id: p.id, name: p.name, avatar: p.avatar ?? "", coins: p.coins, online: p.online ?? false });
             });
             setPlayers(playerList);
 

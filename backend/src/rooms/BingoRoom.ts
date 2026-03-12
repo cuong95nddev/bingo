@@ -130,9 +130,12 @@ export class BingoRoom extends Room {
       this.state.players.set(client.sessionId, existing);
       existing.online = true;
     } else {
+      const styles = ["adventurer", "avataaars", "bottts", "fun-emoji", "lorelei", "notionists", "open-peeps", "thumbs"];
+      const style = styles[Math.floor(Math.random() * styles.length)];
       const player = new Player();
       player.id = options.visitorId;
       player.name = options.name || "Player";
+      player.avatar = `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(options.visitorId)}`;
       player.coins = this.state.config.startCoins;
       this.state.players.set(client.sessionId, player);
     }
