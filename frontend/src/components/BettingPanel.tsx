@@ -68,9 +68,19 @@ function GoldCircle({
 
 
 
-function PoolBadge({ amount, isFire }: { amount: number; isFire: boolean }) {
+function PoolBadge({ amount, isFire, inline }: { amount: number; isFire: boolean; inline?: boolean }) {
   if (amount <= 0) return null;
   const display = amount >= 1000 ? `${Math.round(amount / 1000)}k` : String(amount);
+  if (inline) {
+    return (
+      <div className="flex items-center justify-between w-full px-0.5 pointer-events-none -mb-0.5">
+        <span className="text-[8px] font-bold" style={{ color: "#d4a050" }}>
+          {display}
+        </span>
+        {isFire && <span className="text-[9px]">🔥</span>}
+      </div>
+    );
+  }
   return (
     <div className="absolute -top-2.5 left-0 right-0 flex items-center justify-between px-1 pointer-events-none">
       <span className="text-[9px] font-bold" style={{ color: "#d4a050" }}>
@@ -111,7 +121,7 @@ function SumGrid({
               key={n}
               onClick={() => selectBet("sum", n)}
               disabled={disabled}
-              className={`relative flex flex-col items-center py-1.5 rounded-sm transition-all active:scale-95 ${isWin("sum", n) ? "win-highlight" : ""}`}
+              className={`flex flex-col items-center pt-0.5 pb-1 rounded-sm transition-all active:scale-95 ${isWin("sum", n) ? "win-highlight" : ""}`}
               style={
                 hasBet("sum", n)
                   ? { background: "#22c55e", color: "white" }
@@ -126,6 +136,7 @@ function SumGrid({
               <PoolBadge
                 amount={betPool?.get(`sum:${n}`) ?? 0}
                 isFire={fireKeys.has(`sum:${n}`)}
+                inline
               />
               <span className="text-[15px] font-extrabold leading-none">{n}</span>
               <span className="text-[8px] mt-0.5 opacity-75 font-medium">{sumMult[n]}</span>
