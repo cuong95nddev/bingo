@@ -61,7 +61,7 @@ function PlayerList({ players, mySessionId, compact = false }: { players: Map<st
 
 export function UserPage() {
   const { identity, needsName, saveName } = useIdentity();
-  const { playing: musicPlaying, toggle: toggleMusic, playBetSelect, playDiceReveal, playWin, playLose, playHacker, playJackpot } = useBackgroundMusic();
+  const { playing: musicPlaying, toggle: toggleMusic, playBetSelect, playDiceReveal, playWin, playLose, playHacker, playJackpot, playFinished } = useBackgroundMusic();
   const { state, connected, ticker, placeBet, jackpot, clearJackpot, hackerEvent, clearHackerEvent, joinDenied } = useGame(
     identity?.visitorId || "",
     identity?.name || "",
@@ -198,6 +198,12 @@ export function UserPage() {
     const timer = setTimeout(clearJackpot, 2000);
     return () => clearTimeout(timer);
   }, [jackpot, clearJackpot, playJackpot]);
+
+  useEffect(() => {
+    if (status === "finished") {
+      playFinished();
+    }
+  }, [status, playFinished]);
 
   if (joinDenied) return (
     <div className="h-screen bg-[#071a09] flex items-center justify-center px-6">

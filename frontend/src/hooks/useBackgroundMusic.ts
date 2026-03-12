@@ -7,6 +7,7 @@ const WIN_URL = "https://www.myinstants.com/media/sounds/musica_1.mp3";
 const LOSE_URL = "https://www.myinstants.com/media/sounds/070-challenge-lose.mp3";
 const HACKER_URL = "https://www.myinstants.com/media/sounds/hackerman-the-most-powerful-hacker-of-all-the-time-mp3cut.mp3";
 const JACKPOT_URL = "https://www.myinstants.com/media/sounds/anime-wow-sound-effect.mp3";
+const FINISHED_URL = "https://www.myinstants.com/media/sounds/orchastra-cut2.mp3";
 
 export function useBackgroundMusic() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -78,6 +79,12 @@ export function useBackgroundMusic() {
     sfx.play().catch(() => {});
   }, []);
 
+  const playFinished = useCallback(() => {
+    const sfx = new Audio(FINISHED_URL);
+    sfx.volume = 1;
+    sfx.play().catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (hasInteracted.current) return;
     const autoplay = () => {
@@ -97,5 +104,5 @@ export function useBackgroundMusic() {
     };
   }, []);
 
-  return { playing, toggle, playBetSelect, playDiceReveal, playWin, playLose, playHacker, playJackpot };
+  return { playing, toggle, playBetSelect, playDiceReveal, playWin, playLose, playHacker, playJackpot, playFinished };
 }
