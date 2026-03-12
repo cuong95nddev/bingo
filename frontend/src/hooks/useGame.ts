@@ -55,7 +55,7 @@ export function useGame(visitorId: string, name: string, enabled: boolean) {
               players,
               round: {
                 id: s.round.id,
-                status: s.round.status as "waiting" | "betting" | "drawing" | "result",
+                status: s.round.status as "waiting" | "betting" | "drawing" | "result" | "highlight" | "finished",
                 countdown: s.round.countdown,
                 numbers: [...s.round.numbers],
               },
@@ -63,6 +63,7 @@ export function useGame(visitorId: string, name: string, enabled: boolean) {
                 startCoins: s.config.startCoins,
                 minBet: s.config.minBet,
                 roundDuration: s.config.roundDuration,
+                maxRounds: s.config.maxRounds,
               },
               history,
               mySessionId: r.sessionId,

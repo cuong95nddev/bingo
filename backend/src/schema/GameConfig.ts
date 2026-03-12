@@ -7,4 +7,11 @@ export class GameConfig extends Schema {
   @type("boolean") houseFeeEnabled: boolean = false;
   @type("number") houseFeeMin: number = 10;
   @type("number") houseFeeMax: number = 50;
+  @type("boolean") hackerEnabled: boolean = false;
+  @type("number") hackerMin: number = 50;
+  @type("number") hackerMax: number = 300;
+  @type("boolean") jackpotEnabled: boolean = false;
+  @type("number") jackpotMin: number = 500;
+  @type("number") jackpotMax: number = 2000;
+  @type("number") maxRounds: number = 0;
 }

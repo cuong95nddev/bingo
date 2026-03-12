@@ -14,7 +14,7 @@ export interface GameBet {
 
 export interface GameRound {
   id: number;
-  status: "waiting" | "betting" | "drawing" | "result" | "highlight";
+  status: "waiting" | "betting" | "drawing" | "result" | "highlight" | "finished";
   countdown: number;
   numbers: number[];
 }
@@ -23,6 +23,7 @@ export interface GameConfig {
   startCoins: number;
   minBet: number;
   roundDuration: number;
+  maxRounds: number;
 }
 
 export interface GameState {

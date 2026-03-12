@@ -354,6 +354,43 @@ export function UserPage() {
               <p className="text-sm" style={{ color: "#3d5a3d" }}>Admin sẽ khởi động game sớm thôi</p>
             </div>
           </div>
+        ) : status === "finished" ? (
+          <div className="flex-1 overflow-y-auto px-4 py-6">
+            <div className="text-center mb-5">
+              <div className="text-5xl mb-2">🏆</div>
+              <h2 className="text-xl font-bold text-white">Game Kết Thúc!</h2>
+              <p className="text-sm mt-1" style={{ color: "#4a8a5a" }}>Đã chơi {state.round.id} vòng</p>
+            </div>
+            <div className="space-y-2 max-w-sm mx-auto">
+              {[...state.players.entries()]
+                .sort((a, b) => b[1].coins - a[1].coins)
+                .map(([sessionId, p], rank) => {
+                  const isMe = sessionId === state.mySessionId;
+                  return (
+                    <div
+                      key={sessionId}
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl"
+                      style={{
+                        background: rank === 0 ? "#1a3a10" : isMe ? "#0e2e14" : "#0a1e0d",
+                        border: rank === 0 ? "1px solid #d4a050" : isMe ? "1px solid #2a6a32" : "1px solid #122212",
+                      }}
+                    >
+                      <span className="text-lg font-bold w-8 text-center" style={{
+                        color: rank === 0 ? "#fbbf24" : rank === 1 ? "#c0c0c0" : rank === 2 ? "#cd7f32" : "#4a6a4a",
+                      }}>
+                        {rank + 1}
+                      </span>
+                      <span className="flex-1 font-medium truncate" style={{ color: isMe ? "#86c988" : "#7a9a7a" }}>
+                        {p.name} {isMe && "(bạn)"}
+                      </span>
+                      <span className="font-mono font-bold" style={{ color: "#d4a050" }}>
+                        {p.coins.toLocaleString()}đ
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
         ) : (
           <div className="flex-1 overflow-y-auto">
             <BettingPanel
@@ -369,7 +406,7 @@ export function UserPage() {
         )}
 
         {/* Cart */}
-        {(stagedBets.length > 0 || confirmed) && (() => {
+        {status !== "finished" && (stagedBets.length > 0 || confirmed) && (() => {
           const cartBets = confirmed ? confirmedBets : stagedBets;
           const cartTotal = cartBets.reduce((s, b) => s + b.amount, 0);
           return (
@@ -438,7 +475,7 @@ export function UserPage() {
         })()}
 
         {/* Bottom info bar */}
-        <div className="bg-[#061508] px-4 py-2.5 flex items-center justify-between shrink-0" style={{ borderTop: "1px solid #1a3d1a" }}>
+        {status !== "finished" && <div className="bg-[#061508] px-4 py-2.5 flex items-center justify-between shrink-0" style={{ borderTop: "1px solid #1a3d1a" }}>
           <div className="flex items-center gap-2.5">
             <div
               className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
@@ -460,10 +497,10 @@ export function UserPage() {
               <span className="font-bold" style={{ color: "#d4a050" }}>{totalBet}đ</span>
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Action buttons */}
-        <div className="px-4 py-3 bg-[#061508] flex gap-3 shrink-0" style={{ borderTop: "1px solid #1a3d1a" }}>
+        {status !== "finished" && <div className="px-4 py-3 bg-[#061508] flex gap-3 shrink-0" style={{ borderTop: "1px solid #1a3d1a" }}>
           <button
             onClick={clearStaged}
             disabled={!isBetting || confirmed || stagedBets.length === 0}
@@ -489,7 +526,7 @@ export function UserPage() {
           >
             {confirmed ? "Đã đặt cược" : "Xác nhận"}
           </button>
-        </div>
+        </div>}
       </div>
 
       {/* Drawing / Result overlay */}

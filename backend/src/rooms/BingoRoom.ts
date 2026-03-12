@@ -41,6 +41,13 @@ export class BingoRoom extends Room {
       if (data.houseFeeEnabled != null) this.state.config.houseFeeEnabled = data.houseFeeEnabled;
       if (data.houseFeeMin != null) this.state.config.houseFeeMin = data.houseFeeMin;
       if (data.houseFeeMax != null) this.state.config.houseFeeMax = data.houseFeeMax;
+      if (data.hackerEnabled != null) this.state.config.hackerEnabled = data.hackerEnabled;
+      if (data.hackerMin != null) this.state.config.hackerMin = data.hackerMin;
+      if (data.hackerMax != null) this.state.config.hackerMax = data.hackerMax;
+      if (data.jackpotEnabled != null) this.state.config.jackpotEnabled = data.jackpotEnabled;
+      if (data.jackpotMin != null) this.state.config.jackpotMin = data.jackpotMin;
+      if (data.jackpotMax != null) this.state.config.jackpotMax = data.jackpotMax;
+      if (data.maxRounds != null) this.state.config.maxRounds = data.maxRounds;
     });
 
     this.onMessage("placeBet", (client, data: { type: string; value: number; amount: number }) => {
@@ -100,6 +107,11 @@ export class BingoRoom extends Room {
 
   startGame(): boolean {
     if (this.state.round.status !== "waiting") return false;
+    this.state.players.forEach((player) => {
+      player.coins = this.state.config.startCoins;
+      player.lastWin = 0;
+      player.bets = new ArraySchema<Bet>();
+    });
     this.startBettingPhase();
     return true;
   }
@@ -200,13 +212,63 @@ export class BingoRoom extends Room {
       this.state.history.splice(0, 1);
     }
 
+    // Random hacker/jackpot triggers
+    if (this.state.config.hackerEnabled && Math.random() < 0.2) {
+      this.triggerHacker();
+    }
+    if (this.state.config.jackpotEnabled && Math.random() < 0.15) {
+      this.triggerJackpot();
+    }
+
     // After result display, move to highlight phase
     this.roundTimer = setTimeout(() => {
       this.state.round.status = "highlight";
       this.roundTimer = setTimeout(() => {
-        this.startBettingPhase();
+        const maxRounds = this.state.config.maxRounds;
+        if (maxRounds > 0 && this.roundId >= maxRounds) {
+          this.state.round.status = "finished";
+        } else {
+          this.startBettingPhase();
+        }
       }, HIGHLIGHT_DISPLAY);
     }, RESULT_DISPLAY);
+  }
+
+  triggerHacker(min?: number, max?: number): { victimCount: number; playerCount: number } | null {
+    const hackerMin = Math.max(0, min ?? this.state.config.hackerMin);
+    const hackerMax = Math.max(hackerMin, max ?? this.state.config.hackerMax);
+    const allKeys: string[] = [];
+    this.state.players.forEach((_p, key) => allKeys.push(key));
+    const count = allKeys.length;
+    if (count === 0) return null;
+    const shuffled = allKeys.sort(() => Math.random() - 0.5);
+    const targetCount = Math.floor(count / 2) + 1 + Math.floor(Math.random() * Math.ceil(count / 2));
+    const victims = shuffled.slice(0, Math.min(targetCount, count));
+    const stolen: { name: string; amount: number }[] = [];
+    victims.forEach((key) => {
+      const p = this.state.players.get(key);
+      if (!p) return;
+      const fee = hackerMin + Math.floor(Math.random() * (hackerMax - hackerMin + 1));
+      const actual = Math.min(p.coins, fee);
+      p.coins = Math.max(0, p.coins - actual);
+      if (actual > 0) stolen.push({ name: p.name, amount: actual });
+    });
+    this.broadcast("hacker", { victims: stolen });
+    return { victimCount: stolen.length, playerCount: count };
+  }
+
+  triggerJackpot(min?: number, max?: number): { total: number; perPlayer: number; playerCount: number } | null {
+    const jackpotMin = Math.max(0, min ?? this.state.config.jackpotMin);
+    const jackpotMax = Math.max(jackpotMin, max ?? this.state.config.jackpotMax);
+    const total = jackpotMin + Math.floor(Math.random() * (jackpotMax - jackpotMin + 1));
+    const players: string[] = [];
+    this.state.players.forEach((_p, key) => players.push(key));
+    const count = players.length;
+    if (count === 0) return null;
+    const perPlayer = Math.floor(total / count);
+    this.state.players.forEach((p) => { p.coins += perPlayer; });
+    this.broadcast("jackpot", { total, perPlayer, playerCount: count });
+    return { total, perPlayer, playerCount: count };
   }
 
   private delay(ms: number): Promise<void> {

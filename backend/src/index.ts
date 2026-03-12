@@ -57,6 +57,13 @@ app.get("/api/admin/config", adminAuth, (_req, res) => {
     houseFeeEnabled: c.houseFeeEnabled,
     houseFeeMin: c.houseFeeMin,
     houseFeeMax: c.houseFeeMax,
+    hackerEnabled: c.hackerEnabled,
+    hackerMin: c.hackerMin,
+    hackerMax: c.hackerMax,
+    jackpotEnabled: c.jackpotEnabled,
+    jackpotMin: c.jackpotMin,
+    jackpotMax: c.jackpotMax,
+    maxRounds: c.maxRounds,
   });
 });
 
@@ -69,6 +76,13 @@ app.post("/api/admin/config", adminAuth, (req, res) => {
   if (req.body.houseFeeEnabled != null) c.houseFeeEnabled = Boolean(req.body.houseFeeEnabled);
   if (req.body.houseFeeMin != null) c.houseFeeMin = Number(req.body.houseFeeMin);
   if (req.body.houseFeeMax != null) c.houseFeeMax = Number(req.body.houseFeeMax);
+  if (req.body.hackerEnabled != null) c.hackerEnabled = Boolean(req.body.hackerEnabled);
+  if (req.body.hackerMin != null) c.hackerMin = Number(req.body.hackerMin);
+  if (req.body.hackerMax != null) c.hackerMax = Number(req.body.hackerMax);
+  if (req.body.jackpotEnabled != null) c.jackpotEnabled = Boolean(req.body.jackpotEnabled);
+  if (req.body.jackpotMin != null) c.jackpotMin = Number(req.body.jackpotMin);
+  if (req.body.jackpotMax != null) c.jackpotMax = Number(req.body.jackpotMax);
+  if (req.body.maxRounds != null) c.maxRounds = Number(req.body.maxRounds);
   res.json({ ok: true });
 });
 
@@ -94,39 +108,18 @@ app.post("/api/admin/hacker", adminAuth, (req, res) => {
   if (!bingoRoomRef) return res.status(404).json({ error: "No room" });
   const min = Math.max(0, Number(req.body.min) || 0);
   const max = Math.max(min, Number(req.body.max) || min);
-  const allKeys: string[] = [];
-  bingoRoomRef.state.players.forEach((_p, key) => allKeys.push(key));
-  const count = allKeys.length;
-  if (count === 0) return res.status(400).json({ error: "No players" });
-  const shuffled = allKeys.sort(() => Math.random() - 0.5);
-  const targetCount = Math.floor(count / 2) + 1 + Math.floor(Math.random() * Math.ceil(count / 2));
-  const victims = shuffled.slice(0, Math.min(targetCount, count));
-  const stolen: { name: string; amount: number }[] = [];
-  victims.forEach((key) => {
-    const p = bingoRoomRef!.state.players.get(key);
-    if (!p) return;
-    const fee = min + Math.floor(Math.random() * (max - min + 1));
-    const actual = Math.min(p.coins, fee);
-    p.coins = Math.max(0, p.coins - actual);
-    if (actual > 0) stolen.push({ name: p.name, amount: actual });
-  });
-  bingoRoomRef.broadcast("hacker", { victims: stolen });
-  res.json({ ok: true, victimCount: stolen.length, playerCount: count });
+  const result = bingoRoomRef.triggerHacker(min, max);
+  if (!result) return res.status(400).json({ error: "No players" });
+  res.json({ ok: true, ...result });
 });
 
 app.post("/api/admin/jackpot", adminAuth, (req, res) => {
   if (!bingoRoomRef) return res.status(404).json({ error: "No room" });
   const min = Math.max(0, Number(req.body.min) || 0);
   const max = Math.max(min, Number(req.body.max) || min);
-  const total = min + Math.floor(Math.random() * (max - min + 1));
-  const players: string[] = [];
-  bingoRoomRef.state.players.forEach((_p, key) => players.push(key));
-  const count = players.length;
-  if (count === 0) return res.status(400).json({ error: "No players" });
-  const perPlayer = Math.floor(total / count);
-  bingoRoomRef.state.players.forEach((p) => { p.coins += perPlayer; });
-  bingoRoomRef.broadcast("jackpot", { total, perPlayer, playerCount: count });
-  res.json({ ok: true, total, perPlayer, playerCount: count });
+  const result = bingoRoomRef.triggerJackpot(min, max);
+  if (!result) return res.status(400).json({ error: "No players" });
+  res.json({ ok: true, ...result });
 });
 
 app.get("/api/admin/history", adminAuth, (_req, res) => {

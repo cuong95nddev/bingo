@@ -3,27 +3,22 @@ import { useState, useEffect, useCallback } from "react";
 const API = "/api/admin";
 
 interface Player { sessionId: string; id: string; name: string; coins: number }
-interface Config { startCoins: number; minBet: number; roundDuration: number; houseFeeEnabled: boolean; houseFeeMin: number; houseFeeMax: number }
+interface Config { startCoins: number; minBet: number; roundDuration: number; maxRounds: number; houseFeeEnabled: boolean; houseFeeMin: number; houseFeeMax: number; hackerEnabled: boolean; hackerMin: number; hackerMax: number; jackpotEnabled: boolean; jackpotMin: number; jackpotMax: number }
 interface RoundHistory { id: number; numbers: number[]; timestamp: number }
 
 export function AdminPage() {
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [authError, setAuthError] = useState("");
-  const [activeTab, setActiveTab] = useState<"game" | "players" | "config" | "history">("game");
+  const [activeTab, setActiveTab] = useState<"game" | "players" | "history">("game");
 
   const [players, setPlayers] = useState<Player[]>([]);
-  const [config, setConfig] = useState<Config>({ startCoins: 1000, minBet: 10, roundDuration: 30, houseFeeEnabled: false, houseFeeMin: 10, houseFeeMax: 50 });
+  const [config, setConfig] = useState<Config>({ startCoins: 1000, minBet: 10, roundDuration: 30, maxRounds: 0, houseFeeEnabled: false, houseFeeMin: 10, houseFeeMax: 50, hackerEnabled: false, hackerMin: 50, hackerMax: 300, jackpotEnabled: false, jackpotMin: 500, jackpotMax: 2000 });
   const [history, setHistory] = useState<RoundHistory[]>([]);
   const [giftAmount, setGiftAmount] = useState(100);
   const [gameStatus, setGameStatus] = useState<string>("waiting");
   const [starting, setStarting] = useState(false);
-  const [jackpotMin, setJackpotMin] = useState(500);
-  const [jackpotMax, setJackpotMax] = useState(2000);
-  const [jackpotResult, setJackpotResult] = useState<{ total: number; perPlayer: number; playerCount: number } | null>(null);
-  const [hackerMin, setHackerMin] = useState(50);
-  const [hackerMax, setHackerMax] = useState(300);
-  const [hackerResult, setHackerResult] = useState<{ victimCount: number; playerCount: number } | null>(null);
+  const [showStartDialog, setShowStartDialog] = useState(false);
 
   const authHeader = `?password=${password}`;
 
@@ -53,6 +48,7 @@ export function AdminPage() {
 
   const handleStartGame = async () => {
     setStarting(true);
+    await handleSaveConfig();
     await fetch(`${API}/start`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -60,32 +56,7 @@ export function AdminPage() {
     });
     await fetchStatus();
     setStarting(false);
-  };
-
-  const handleHacker = async () => {
-    const res = await fetch(`${API}/hacker`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password, min: hackerMin, max: hackerMax }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setHackerResult(data);
-      setTimeout(() => setHackerResult(null), 5000);
-    }
-  };
-
-  const handleJackpot = async () => {
-    const res = await fetch(`${API}/jackpot`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password, min: jackpotMin, max: jackpotMax }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setJackpotResult(data);
-      setTimeout(() => setJackpotResult(null), 5000);
-    }
+    setShowStartDialog(false);
   };
 
   const handleNewGame = async () => {
@@ -132,14 +103,13 @@ export function AdminPage() {
     fetchPlayers();
   };
 
-  const handleSaveConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveConfig = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     await fetch(`${API}/config`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...config, password }),
     });
-    alert("Đã lưu cấu hình!");
   };
 
   if (!authenticated) {
@@ -166,7 +136,6 @@ export function AdminPage() {
   const tabs = [
     { key: "game", label: "Game" },
     { key: "players", label: "Players" },
-    { key: "config", label: "Cấu hình" },
     { key: "history", label: "Lịch sử" },
   ] as const;
 
@@ -203,25 +172,29 @@ export function AdminPage() {
                 <span className="text-gray-400">Trạng thái</span>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                   gameStatus === "waiting" ? "bg-gray-700 text-gray-300" :
+                  gameStatus === "finished" ? "bg-purple-900 text-purple-400" :
                   gameStatus === "betting" ? "bg-green-900 text-green-400" :
                   gameStatus === "drawing" ? "bg-blue-900 text-blue-400" :
                   "bg-yellow-900 text-yellow-400"
                 }`}>
                   {gameStatus === "waiting" ? "Chờ bắt đầu" :
+                   gameStatus === "finished" ? "Kết thúc" :
                    gameStatus === "betting" ? "Đang đặt cược" :
                    gameStatus === "drawing" ? "Đang quay" :
                    "Kết quả"}
                 </span>
               </div>
               <button
-                onClick={handleStartGame}
+                onClick={() => { fetchConfig(); setShowStartDialog(true); }}
                 disabled={gameStatus !== "waiting" || starting}
                 className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl text-lg transition-colors"
               >
                 {starting ? "Đang khởi động..." : "Bắt đầu Game"}
               </button>
               {gameStatus !== "waiting" && (
-                <p className="text-gray-500 text-sm text-center">Game đang chạy — các vòng tự động tiếp tục</p>
+                <p className="text-gray-500 text-sm text-center">
+                  {gameStatus === "finished" ? "Game đã kết thúc — nhấn Reset để chơi lại" : "Game đang chạy — các vòng tự động tiếp tục"}
+                </p>
               )}
               <button
                 onClick={handleNewGame}
@@ -231,82 +204,6 @@ export function AdminPage() {
               </button>
             </div>
 
-            {/* Hacker */}
-            <div className="bg-gray-800 rounded-xl p-6 space-y-4" style={{ border: "1px solid #ef444430" }}>
-              <h2 className="text-red-400 font-bold text-lg">Hacker</h2>
-              <p className="text-gray-400 text-xs">Trừ tiền ngẫu nhiên của hơn 50% người chơi, hiển thị cảnh báo tấn công</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-gray-400 text-xs block mb-1">Trừ tối thiểu</label>
-                  <input
-                    type="number"
-                    value={hackerMin}
-                    onChange={(e) => setHackerMin(Number(e.target.value))}
-                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="text-gray-400 text-xs block mb-1">Trừ tối đa</label>
-                  <input
-                    type="number"
-                    value={hackerMax}
-                    onChange={(e) => setHackerMax(Number(e.target.value))}
-                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm"
-                  />
-                </div>
-              </div>
-              <button
-                onClick={handleHacker}
-                className="w-full bg-red-700 hover:bg-red-600 text-white font-bold py-3 rounded-xl transition-colors text-lg font-mono tracking-widest"
-              >
-                HACK
-              </button>
-              {hackerResult && (
-                <div className="bg-red-900/30 border border-red-600/30 rounded-lg px-4 py-3 text-sm space-y-1">
-                  <div className="text-red-400 font-bold">Đã tấn công!</div>
-                  <div className="text-gray-300">{hackerResult.victimCount}/{hackerResult.playerCount} người bị trừ tiền</div>
-                </div>
-              )}
-            </div>
-
-            {/* Jackpot */}
-            <div className="bg-gray-800 rounded-xl p-6 space-y-4">
-              <h2 className="text-yellow-400 font-bold text-lg">Nổ Hũ</h2>
-              <p className="text-gray-400 text-xs">Chọn khoảng ngẫu nhiên — hệ thống sẽ chia đều cho tất cả người chơi</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-gray-400 text-xs block mb-1">Tối thiểu</label>
-                  <input
-                    type="number"
-                    value={jackpotMin}
-                    onChange={(e) => setJackpotMin(Number(e.target.value))}
-                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="text-gray-400 text-xs block mb-1">Tối đa</label>
-                  <input
-                    type="number"
-                    value={jackpotMax}
-                    onChange={(e) => setJackpotMax(Number(e.target.value))}
-                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm"
-                  />
-                </div>
-              </div>
-              <button
-                onClick={handleJackpot}
-                className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 rounded-xl transition-colors text-lg"
-              >
-                Nổ Hũ
-              </button>
-              {jackpotResult && (
-                <div className="bg-yellow-900/40 border border-yellow-600/40 rounded-lg px-4 py-3 text-sm space-y-1">
-                  <div className="text-yellow-300 font-bold">Đã nổ hũ!</div>
-                  <div className="text-gray-300">Tổng: <span className="text-yellow-400 font-bold">{jackpotResult.total.toLocaleString("vi-VN")}đ</span></div>
-                  <div className="text-gray-300">Mỗi người: <span className="text-yellow-400 font-bold">+{jackpotResult.perPlayer.toLocaleString("vi-VN")}đ</span> × {jackpotResult.playerCount} người</div>
-                </div>
-              )}
-            </div>
           </div>
         )}
 
@@ -375,78 +272,6 @@ export function AdminPage() {
           </div>
         )}
 
-        {/* Config Tab */}
-        {activeTab === "config" && (
-          <form onSubmit={handleSaveConfig} className="max-w-md space-y-4">
-            <div>
-              <label className="text-gray-400 text-sm block mb-1">Coins ban đầu</label>
-              <input
-                type="number"
-                value={config.startCoins}
-                onChange={(e) => setConfig({ ...config, startCoins: Number(e.target.value) })}
-                className="w-full bg-gray-700 text-white rounded-lg px-4 py-3"
-              />
-            </div>
-            <div>
-              <label className="text-gray-400 text-sm block mb-1">Cược tối thiểu</label>
-              <input
-                type="number"
-                value={config.minBet}
-                onChange={(e) => setConfig({ ...config, minBet: Number(e.target.value) })}
-                className="w-full bg-gray-700 text-white rounded-lg px-4 py-3"
-              />
-            </div>
-            <div>
-              <label className="text-gray-400 text-sm block mb-1">Thời gian mỗi vòng (giây)</label>
-              <input
-                type="number"
-                value={config.roundDuration}
-                onChange={(e) => setConfig({ ...config, roundDuration: Number(e.target.value) })}
-                className="w-full bg-gray-700 text-white rounded-lg px-4 py-3"
-              />
-            </div>
-            <div className="border-t border-gray-700 pt-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <label className="text-white font-medium block">Phí nhàn rỗi</label>
-                  <span className="text-gray-400 text-xs">Thu phí ngẫu nhiên nếu không đặt cược trong vòng</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setConfig({ ...config, houseFeeEnabled: !config.houseFeeEnabled })}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.houseFeeEnabled ? "bg-green-600" : "bg-gray-600"}`}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.houseFeeEnabled ? "translate-x-6" : "translate-x-1"}`} />
-                </button>
-              </div>
-              <div className={`grid grid-cols-2 gap-3 ${!config.houseFeeEnabled ? "opacity-40 pointer-events-none" : ""}`}>
-                <div>
-                  <label className="text-gray-400 text-sm block mb-1">Phí tối thiểu</label>
-                  <input
-                    type="number"
-                    value={config.houseFeeMin}
-                    onChange={(e) => setConfig({ ...config, houseFeeMin: Number(e.target.value) })}
-                    className="w-full bg-gray-700 text-white rounded-lg px-4 py-3"
-                  />
-                </div>
-                <div>
-                  <label className="text-gray-400 text-sm block mb-1">Phí tối đa</label>
-                  <input
-                    type="number"
-                    value={config.houseFeeMax}
-                    onChange={(e) => setConfig({ ...config, houseFeeMax: Number(e.target.value) })}
-                    className="w-full bg-gray-700 text-white rounded-lg px-4 py-3"
-                  />
-                </div>
-              </div>
-            </div>
-            <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-lg">
-              Lưu cấu hình
-            </button>
-            <p className="text-gray-500 text-xs">* Thay đổi áp dụng cho vòng tiếp theo</p>
-          </form>
-        )}
-
         {/* History Tab */}
         {activeTab === "history" && (
           <div>
@@ -476,6 +301,173 @@ export function AdminPage() {
           </div>
         )}
       </div>
+
+      {/* Start Game Config Dialog */}
+      {showStartDialog && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowStartDialog(false)}>
+          <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md mx-4 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-xl font-bold text-white text-center">Cấu hình Game</h2>
+            <div>
+              <label className="text-gray-400 text-sm block mb-1">Coins ban đầu</label>
+              <input
+                type="number"
+                value={config.startCoins}
+                onChange={(e) => setConfig({ ...config, startCoins: Number(e.target.value) })}
+                className="w-full bg-gray-700 text-white rounded-lg px-4 py-3"
+              />
+            </div>
+            <div>
+              <label className="text-gray-400 text-sm block mb-1">Cược tối thiểu</label>
+              <input
+                type="number"
+                value={config.minBet}
+                onChange={(e) => setConfig({ ...config, minBet: Number(e.target.value) })}
+                className="w-full bg-gray-700 text-white rounded-lg px-4 py-3"
+              />
+            </div>
+            <div>
+              <label className="text-gray-400 text-sm block mb-1">Thời gian mỗi vòng (giây)</label>
+              <input
+                type="number"
+                value={config.roundDuration}
+                onChange={(e) => setConfig({ ...config, roundDuration: Number(e.target.value) })}
+                className="w-full bg-gray-700 text-white rounded-lg px-4 py-3"
+              />
+            </div>
+            <div>
+              <label className="text-gray-400 text-sm block mb-1">Số vòng tối đa (0 = không giới hạn)</label>
+              <input
+                type="number"
+                value={config.maxRounds}
+                onChange={(e) => setConfig({ ...config, maxRounds: Number(e.target.value) })}
+                className="w-full bg-gray-700 text-white rounded-lg px-4 py-3"
+                min={0}
+              />
+            </div>
+            <div className="border-t border-gray-700 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <label className="text-white font-medium block">Phí nhàn rỗi</label>
+                  <span className="text-gray-400 text-xs">Thu phí ngẫu nhiên nếu không đặt cược trong vòng</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConfig({ ...config, houseFeeEnabled: !config.houseFeeEnabled })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.houseFeeEnabled ? "bg-green-600" : "bg-gray-600"}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.houseFeeEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+              <div className={`grid grid-cols-2 gap-3 ${!config.houseFeeEnabled ? "opacity-40 pointer-events-none" : ""}`}>
+                <div>
+                  <label className="text-gray-400 text-sm block mb-1">Phí tối thiểu</label>
+                  <input
+                    type="number"
+                    value={config.houseFeeMin}
+                    onChange={(e) => setConfig({ ...config, houseFeeMin: Number(e.target.value) })}
+                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-sm block mb-1">Phí tối đa</label>
+                  <input
+                    type="number"
+                    value={config.houseFeeMax}
+                    onChange={(e) => setConfig({ ...config, houseFeeMax: Number(e.target.value) })}
+                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-gray-700 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <label className="text-red-400 font-medium block">Hacker</label>
+                  <span className="text-gray-400 text-xs">Ngẫu nhiên trừ tiền người chơi mỗi vòng (~20%)</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConfig({ ...config, hackerEnabled: !config.hackerEnabled })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.hackerEnabled ? "bg-red-600" : "bg-gray-600"}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.hackerEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+              <div className={`grid grid-cols-2 gap-3 ${!config.hackerEnabled ? "opacity-40 pointer-events-none" : ""}`}>
+                <div>
+                  <label className="text-gray-400 text-sm block mb-1">Trừ tối thiểu</label>
+                  <input
+                    type="number"
+                    value={config.hackerMin}
+                    onChange={(e) => setConfig({ ...config, hackerMin: Number(e.target.value) })}
+                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-sm block mb-1">Trừ tối đa</label>
+                  <input
+                    type="number"
+                    value={config.hackerMax}
+                    onChange={(e) => setConfig({ ...config, hackerMax: Number(e.target.value) })}
+                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-gray-700 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <label className="text-yellow-400 font-medium block">Nổ Hũ</label>
+                  <span className="text-gray-400 text-xs">Ngẫu nhiên chia tiền cho tất cả mỗi vòng (~15%)</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConfig({ ...config, jackpotEnabled: !config.jackpotEnabled })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.jackpotEnabled ? "bg-yellow-600" : "bg-gray-600"}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.jackpotEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+              <div className={`grid grid-cols-2 gap-3 ${!config.jackpotEnabled ? "opacity-40 pointer-events-none" : ""}`}>
+                <div>
+                  <label className="text-gray-400 text-sm block mb-1">Tối thiểu</label>
+                  <input
+                    type="number"
+                    value={config.jackpotMin}
+                    onChange={(e) => setConfig({ ...config, jackpotMin: Number(e.target.value) })}
+                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-sm block mb-1">Tối đa</label>
+                  <input
+                    type="number"
+                    value={config.jackpotMax}
+                    onChange={(e) => setConfig({ ...config, jackpotMax: Number(e.target.value) })}
+                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setShowStartDialog(false)}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 font-bold py-3 rounded-xl transition-colors"
+              >
+                Huỷ
+              </button>
+              <button
+                onClick={handleStartGame}
+                disabled={starting}
+                className="flex-1 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold py-3 rounded-xl transition-colors"
+              >
+                {starting ? "Đang khởi động..." : "Bắt đầu"}
+              </button>
+            </div>
+            <p className="text-gray-500 text-xs text-center">* Cấu hình sẽ được lưu khi bắt đầu game</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
