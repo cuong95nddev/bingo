@@ -68,25 +68,15 @@ function GoldCircle({
 
 
 
-function PoolBadge({ amount, isFire, inline }: { amount: number; isFire: boolean; inline?: boolean }) {
+function PoolBadge({ amount, isFire }: { amount: number; isFire: boolean }) {
   if (amount <= 0) return null;
   const display = amount >= 1000 ? `${Math.round(amount / 1000)}k` : String(amount);
-  if (inline) {
-    return (
-      <div className="flex items-center justify-between w-full px-0.5 pointer-events-none -mb-0.5">
-        <span className="text-[8px] font-bold" style={{ color: "#d4a050" }}>
-          {display}
-        </span>
-        {isFire && <span className="text-[9px]">🔥</span>}
-      </div>
-    );
-  }
   return (
-    <div className="absolute -top-2.5 left-0 right-0 flex items-center justify-between px-1 pointer-events-none">
-      <span className="text-[9px] font-bold" style={{ color: "#d4a050" }}>
+    <div className="flex items-center justify-between w-full px-0.5 pointer-events-none -mb-0.5">
+      <span className="text-[8px] font-bold" style={{ color: "#d4a050" }}>
         {display}
       </span>
-      {isFire && <span className="text-[10px]">🔥</span>}
+      {isFire && <span className="text-[9px]">🔥</span>}
     </div>
   );
 }
@@ -136,7 +126,6 @@ function SumGrid({
               <PoolBadge
                 amount={betPool?.get(`sum:${n}`) ?? 0}
                 isFire={fireKeys.has(`sum:${n}`)}
-                inline
               />
               <span className="text-[15px] font-extrabold leading-none">{n}</span>
               <span className="text-[8px] mt-0.5 opacity-75 font-medium">{sumMult[n]}</span>
@@ -167,7 +156,7 @@ function TripleSection({
         <QuestionBadge />
       </div>
       <div className="px-2">
-        <div className="rounded-xl pt-4 px-2 pb-2 flex gap-1.5" style={{ background: "#0e2510" }}>
+        <div className="rounded-xl p-2 flex gap-1.5" style={{ background: "#0e2510" }}>
           {items.map(({ label, value }) => {
             const active = hasBet("triple", value);
             const win = isWin("triple", value);
@@ -176,7 +165,7 @@ function TripleSection({
                 key={value}
                 onClick={() => !disabled && selectBet("triple", value)}
                 disabled={disabled}
-                className={`relative flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-all active:scale-95 ${win ? "win-highlight" : ""}`}
+                className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-all active:scale-95 ${win ? "win-highlight" : ""}`}
                 style={{ background: active ? "#1a5a28" : win ? WIN_BG : "#162e1a" }}
               >
                 <PoolBadge
@@ -208,7 +197,7 @@ function DoubleSection({
         <QuestionBadge />
       </div>
       <div className="px-2">
-        <div className="rounded-xl pt-4 px-2 pb-2 flex gap-1.5" style={{ background: "#0e2510" }}>
+        <div className="rounded-xl p-2 flex gap-1.5" style={{ background: "#0e2510" }}>
           {numbers.map((n) => {
             const active = hasBet("double", n);
             const win = isWin("double", n);
@@ -217,7 +206,7 @@ function DoubleSection({
                 key={n}
                 onClick={() => !disabled && selectBet("double", n)}
                 disabled={disabled}
-                className={`relative flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-all active:scale-95 ${win ? "win-highlight" : ""}`}
+                className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-all active:scale-95 ${win ? "win-highlight" : ""}`}
                 style={{ background: active ? "#1a5a28" : win ? WIN_BG : "#162e1a" }}
               >
                 <PoolBadge
@@ -252,7 +241,7 @@ function SingleSection({
         <QuestionBadge />
       </div>
       <div className="px-2">
-        <div className="rounded-xl pt-4 px-2 pb-2 flex gap-1.5" style={{ background: "#0e2510" }}>
+        <div className="rounded-xl p-2 flex gap-1.5" style={{ background: "#0e2510" }}>
           {numbers.map((n) => {
             const active = hasBet("single", n);
             const win = isWin("single", n);
@@ -261,7 +250,7 @@ function SingleSection({
                 key={n}
                 onClick={() => !disabled && selectBet("single", n)}
                 disabled={disabled}
-                className={`relative flex-1 flex flex-col items-center justify-center py-2.5 rounded-lg transition-all active:scale-95 ${win ? "win-highlight" : ""}`}
+                className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-lg transition-all active:scale-95 ${win ? "win-highlight" : ""}`}
                 style={{ background: active ? "#1a5a28" : win ? WIN_BG : "#162e1a" }}
               >
                 <PoolBadge
@@ -352,7 +341,7 @@ export function BettingPanel({
       <SectionHeader>Cộng tổng</SectionHeader>
 
         {/* Big / Draw / Small buttons */}
-        <div className="px-2 pb-1 pt-3">
+        <div className="px-2 pb-1">
           <div className="flex gap-1.5">
             {[
               { type: "small", label: "NHỎ", sub: `3-${thresholds.smallMax}`, mult: "x1.5" },
@@ -363,7 +352,7 @@ export function BettingPanel({
                 key={type}
                 onClick={() => selectBet(type, 0)}
                 disabled={disabled}
-                className={`relative flex-1 py-4 rounded-xl flex flex-col items-center gap-0.5 transition-all active:scale-95 ${isWin(type, 0) ? "win-highlight" : ""}`}
+                className={`flex-1 pt-1 pb-3 rounded-xl flex flex-col items-center gap-0.5 transition-all active:scale-95 ${isWin(type, 0) ? "win-highlight" : ""}`}
                 style={
                   hasBet(type, 0)
                     ? { background: "#22c55e", color: "#061508" }
