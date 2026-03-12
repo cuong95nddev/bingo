@@ -56,11 +56,7 @@ function PlayerList({ players, mySessionId, compact = false }: { players: Map<st
   );
 }
 
-function formatTime(seconds: number) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
+
 
 export function UserPage() {
   const { identity, needsName, saveName } = useIdentity();
@@ -273,19 +269,30 @@ export function UserPage() {
             </div>
 
             <div
-              className={`bg-[#111827] rounded-lg px-3 py-1 font-mono text-2xl font-bold tracking-widest shrink-0 min-w-[88px] text-center ${
+              className={`rounded-xl px-4 py-1.5 shrink-0 min-w-[110px] text-center ${
                 isBetting && state.round.countdown <= 10
-                  ? "text-red-400 animate-pulse"
-                  : "text-white"
+                  ? "animate-pulse"
+                  : ""
               }`}
+              style={{
+                background: isBetting && state.round.countdown <= 10
+                  ? "linear-gradient(135deg, #dc2626, #991b1b)"
+                  : "linear-gradient(135deg, #22c55e, #166534)",
+              }}
             >
-              {isBetting
-                ? formatTime(state.round.countdown)
-                : status === "drawing"
-                ? "——"
-                : status === "result"
-                ? "05:00"
-                : "——"}
+              {isBetting ? (
+                <div className="flex items-center justify-center gap-0.5">
+                  <span className="text-4xl font-black text-white" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.3)" }}>
+                    {String(Math.floor(state.round.countdown / 60)).padStart(2, "0")}
+                  </span>
+                  <span className="text-3xl text-white/80 font-black mx-0.5">:</span>
+                  <span className="text-4xl font-black text-white" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.3)" }}>
+                    {String(state.round.countdown % 60).padStart(2, "0")}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-2xl text-white/60 font-bold">——</span>
+              )}
             </div>
 
             <div className="flex-1 text-right min-w-0">
@@ -473,6 +480,7 @@ export function UserPage() {
               config={state.config}
               currentBets={confirmed ? confirmedBets : stagedBets}
               winOptions={winOptions}
+              betPool={state.betPool}
             />
           </div>
         )}

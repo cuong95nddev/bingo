@@ -11,6 +11,7 @@ interface Props {
   config: GameConfig;
   currentBets: GameBet[];
   winOptions?: Set<string>;
+  betPool?: Map<string, number>;
 }
 
 const GOLD_ACTIVE = "radial-gradient(circle at 35% 30%, #ffffff, #22c55e)";
@@ -67,6 +68,19 @@ function GoldCircle({
 
 
 
+function PoolBadge({ amount, isFire }: { amount: number; isFire: boolean }) {
+  if (amount <= 0) return null;
+  const display = amount >= 1000 ? `${Math.round(amount / 1000)}k` : String(amount);
+  return (
+    <div className="absolute -top-2.5 left-0 right-0 flex items-center justify-between px-1 pointer-events-none">
+      <span className="text-[9px] font-bold" style={{ color: "#d4a050" }}>
+        {display}
+      </span>
+      {isFire && <span className="text-[10px]">🔥</span>}
+    </div>
+  );
+}
+
 function SumGrid({
   rows,
   sumMult,
@@ -75,6 +89,8 @@ function SumGrid({
   isWin,
   selectBet,
   disabled,
+  betPool,
+  fireKeys,
 }: {
   rows: number[][];
   sumMult: Record<number, string>;
@@ -83,6 +99,8 @@ function SumGrid({
   isWin: (type: string, value: number) => boolean;
   selectBet: (type: string, value: number) => void;
   disabled: boolean;
+  betPool?: Map<string, number>;
+  fireKeys: Set<string>;
 }) {
   return (
     <div className="px-2 pb-1">
@@ -93,7 +111,7 @@ function SumGrid({
               key={n}
               onClick={() => selectBet("sum", n)}
               disabled={disabled}
-              className={`flex flex-col items-center py-1.5 rounded-sm transition-all active:scale-95 ${isWin("sum", n) ? "win-highlight" : ""}`}
+              className={`relative flex flex-col items-center py-1.5 rounded-sm transition-all active:scale-95 ${isWin("sum", n) ? "win-highlight" : ""}`}
               style={
                 hasBet("sum", n)
                   ? { background: "#22c55e", color: "white" }
@@ -105,6 +123,10 @@ function SumGrid({
                     }
               }
             >
+              <PoolBadge
+                amount={betPool?.get(`sum:${n}`) ?? 0}
+                isFire={fireKeys.has(`sum:${n}`)}
+              />
               <span className="text-[15px] font-extrabold leading-none">{n}</span>
               <span className="text-[8px] mt-0.5 opacity-75 font-medium">{sumMult[n]}</span>
             </button>
@@ -118,8 +140,8 @@ function SumGrid({
 const WIN_BG = "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)";
 
 function TripleSection({
-  numbers, hasBet, isWin, selectBet, disabled,
-}: { numbers: number[]; hasBet: (t: string, v: number) => boolean; isWin: (t: string, v: number) => boolean; selectBet: (t: string, v: number) => void; disabled: boolean }) {
+  numbers, hasBet, isWin, selectBet, disabled, betPool, fireKeys,
+}: { numbers: number[]; hasBet: (t: string, v: number) => boolean; isWin: (t: string, v: number) => boolean; selectBet: (t: string, v: number) => void; disabled: boolean; betPool?: Map<string, number>; fireKeys: Set<string> }) {
   const items = [...numbers.map((n) => ({ label: n, value: n })), { label: "★", value: 0 }];
   return (
     <div className="pb-1">
@@ -143,9 +165,13 @@ function TripleSection({
                 key={value}
                 onClick={() => !disabled && selectBet("triple", value)}
                 disabled={disabled}
-                className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-all active:scale-95 ${win ? "win-highlight" : ""}`}
+                className={`relative flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-all active:scale-95 ${win ? "win-highlight" : ""}`}
                 style={{ background: active ? "#1a5a28" : win ? WIN_BG : "#162e1a" }}
               >
+                <PoolBadge
+                  amount={betPool?.get(`triple:${value}`) ?? 0}
+                  isFire={fireKeys.has(`triple:${value}`)}
+                />
                 <GoldCircle label={label} size="md" active={active} />
                 <GoldCircle label={label} size="md" active={active} />
                 <GoldCircle label={label} size="md" active={active} />
@@ -159,8 +185,8 @@ function TripleSection({
 }
 
 function DoubleSection({
-  numbers, hasBet, isWin, selectBet, disabled,
-}: { numbers: number[]; hasBet: (t: string, v: number) => boolean; isWin: (t: string, v: number) => boolean; selectBet: (t: string, v: number) => void; disabled: boolean }) {
+  numbers, hasBet, isWin, selectBet, disabled, betPool, fireKeys,
+}: { numbers: number[]; hasBet: (t: string, v: number) => boolean; isWin: (t: string, v: number) => boolean; selectBet: (t: string, v: number) => void; disabled: boolean; betPool?: Map<string, number>; fireKeys: Set<string> }) {
   return (
     <div className="pb-1">
       <div className="px-2 pt-2 pb-1.5 flex items-center" style={{ color: "white" }}>
@@ -180,9 +206,13 @@ function DoubleSection({
                 key={n}
                 onClick={() => !disabled && selectBet("double", n)}
                 disabled={disabled}
-                className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-all active:scale-95 ${win ? "win-highlight" : ""}`}
+                className={`relative flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-all active:scale-95 ${win ? "win-highlight" : ""}`}
                 style={{ background: active ? "#1a5a28" : win ? WIN_BG : "#162e1a" }}
               >
+                <PoolBadge
+                  amount={betPool?.get(`double:${n}`) ?? 0}
+                  isFire={fireKeys.has(`double:${n}`)}
+                />
                 <GoldCircle label={n} size="md" active={active} />
                 <GoldCircle label={n} size="md" active={active} />
               </button>
@@ -195,8 +225,8 @@ function DoubleSection({
 }
 
 function SingleSection({
-  numbers, hasBet, isWin, selectBet, disabled,
-}: { numbers: number[]; hasBet: (t: string, v: number) => boolean; isWin: (t: string, v: number) => boolean; selectBet: (t: string, v: number) => void; disabled: boolean }) {
+  numbers, hasBet, isWin, selectBet, disabled, betPool, fireKeys,
+}: { numbers: number[]; hasBet: (t: string, v: number) => boolean; isWin: (t: string, v: number) => boolean; selectBet: (t: string, v: number) => void; disabled: boolean; betPool?: Map<string, number>; fireKeys: Set<string> }) {
   return (
     <div className="pb-3">
       <div className="px-2 pt-2 pb-1.5 flex items-center" style={{ color: "white" }}>
@@ -220,9 +250,13 @@ function SingleSection({
                 key={n}
                 onClick={() => !disabled && selectBet("single", n)}
                 disabled={disabled}
-                className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-lg transition-all active:scale-95 ${win ? "win-highlight" : ""}`}
+                className={`relative flex-1 flex flex-col items-center justify-center py-2.5 rounded-lg transition-all active:scale-95 ${win ? "win-highlight" : ""}`}
                 style={{ background: active ? "#1a5a28" : win ? WIN_BG : "#162e1a" }}
               >
+                <PoolBadge
+                  amount={betPool?.get(`single:${n}`) ?? 0}
+                  isFire={fireKeys.has(`single:${n}`)}
+                />
                 <GoldCircle label={n} size="lg" active={active} />
               </button>
             );
@@ -240,6 +274,7 @@ export function BettingPanel({
   config,
   currentBets,
   winOptions = new Set(),
+  betPool,
 }: Props) {
   const [pendingBet, setPendingBet] = useState<{ type: string; value: number } | null>(null);
 
@@ -258,6 +293,13 @@ export function BettingPanel({
   const half = Math.ceil(allSums.length / 2);
   const sumRows = useMemo(() => [allSums.slice(0, half), allSums.slice(half).reverse()], [allSums, half]);
   const sumCols = Math.min(8, half);
+
+  const fireKeys = useMemo(() => {
+    if (!betPool || betPool.size === 0) return new Set<string>();
+    const entries = [...betPool.entries()].filter(([, v]) => v > 0);
+    entries.sort((a, b) => b[1] - a[1]);
+    return new Set(entries.slice(0, 3).map(([k]) => k));
+  }, [betPool]);
 
   const drawLabel = thresholds.drawValues.join("-");
 
@@ -310,7 +352,7 @@ export function BettingPanel({
                 key={type}
                 onClick={() => selectBet(type, 0)}
                 disabled={disabled}
-                className={`flex-1 py-4 rounded-xl flex flex-col items-center gap-0.5 transition-all active:scale-95 ${isWin(type, 0) ? "win-highlight" : ""}`}
+                className={`relative flex-1 py-4 rounded-xl flex flex-col items-center gap-0.5 transition-all active:scale-95 ${isWin(type, 0) ? "win-highlight" : ""}`}
                 style={
                   hasBet(type, 0)
                     ? { background: "#22c55e", color: "#061508" }
@@ -319,6 +361,10 @@ export function BettingPanel({
                     : { background: "#0e2510", color: "white", border: "1px solid #1a4a20" }
                 }
               >
+                <PoolBadge
+                  amount={betPool?.get(`${type}:0`) ?? 0}
+                  isFire={fireKeys.has(`${type}:0`)}
+                />
                 <span
                   className="font-black text-xl tracking-tight"
                   style={{ color: hasBet(type, 0) || isWin(type, 0) ? "#1a0800" : type === "draw" ? "#d4a050" : "white" }}
@@ -346,11 +392,13 @@ export function BettingPanel({
           isWin={isWin}
           selectBet={selectBet}
           disabled={disabled}
+          betPool={betPool}
+          fireKeys={fireKeys}
         />
 
-        <TripleSection numbers={numbers} hasBet={hasBet} isWin={isWin} selectBet={selectBet} disabled={disabled} />
-        <DoubleSection numbers={numbers} hasBet={hasBet} isWin={isWin} selectBet={selectBet} disabled={disabled} />
-        <SingleSection numbers={numbers} hasBet={hasBet} isWin={isWin} selectBet={selectBet} disabled={disabled} />
+        <TripleSection numbers={numbers} hasBet={hasBet} isWin={isWin} selectBet={selectBet} disabled={disabled} betPool={betPool} fireKeys={fireKeys} />
+        <DoubleSection numbers={numbers} hasBet={hasBet} isWin={isWin} selectBet={selectBet} disabled={disabled} betPool={betPool} fireKeys={fireKeys} />
+        <SingleSection numbers={numbers} hasBet={hasBet} isWin={isWin} selectBet={selectBet} disabled={disabled} betPool={betPool} fireKeys={fireKeys} />
       </>
     );
 }
