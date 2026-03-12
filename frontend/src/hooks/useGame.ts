@@ -64,6 +64,7 @@ export function useGame(visitorId: string, name: string, enabled: boolean) {
                 minBet: s.config.minBet,
                 roundDuration: s.config.roundDuration,
                 maxRounds: s.config.maxRounds,
+                diceMax: s.config.diceMax ?? 6,
               },
               history,
               mySessionId: r.sessionId,

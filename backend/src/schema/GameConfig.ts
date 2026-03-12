@@ -14,4 +14,5 @@ export class GameConfig extends Schema {
   @type("number") jackpotMin: number = 500;
   @type("number") jackpotMax: number = 2000;
   @type("number") maxRounds: number = 0;
+  @type("number") diceMax: number = 6;
 }

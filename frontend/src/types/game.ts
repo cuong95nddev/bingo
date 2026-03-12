@@ -24,6 +24,7 @@ export interface GameConfig {
   minBet: number;
   roundDuration: number;
   maxRounds: number;
+  diceMax: number;
 }
 
 export interface GameState {

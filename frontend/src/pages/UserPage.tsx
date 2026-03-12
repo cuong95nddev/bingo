@@ -3,6 +3,7 @@ import { useIdentity } from "../hooks/useIdentity";
 import { useGame } from "../hooks/useGame";
 import { NameModal } from "../components/NameModal";
 import { BettingPanel } from "../components/BettingPanel";
+import { computeThresholds } from "../utils/diceUtils";
 
 function PlayerList({ players, mySessionId, compact = false }: { players: Map<string, any>; mySessionId: string; compact?: boolean }) {
   const sorted = [...players.entries()].sort((a, b) => b[1].coins - a[1].coins);
@@ -38,7 +39,7 @@ function PlayerList({ players, mySessionId, compact = false }: { players: Map<st
                 {p.name}{isMe && <span className="ml-1 text-[9px]" style={{ color: "#4a8a5a" }}>(bạn)</span>}
               </span>
               <span className="font-mono text-sm font-bold shrink-0" style={{ color: "#d4a050" }}>
-                {p.coins.toLocaleString()}đ
+                {p.coins.toLocaleString()} ngô
               </span>
             </div>
           );
@@ -82,21 +83,24 @@ export function UserPage() {
     }
   }, [state]);
 
+  const diceMax = state?.config?.diceMax ?? 6;
+
   function getWinOptions(numbers: number[]): Set<string> {
     if (numbers.length < 3) return new Set();
     const counts: Record<number, number> = {};
     for (const n of numbers) counts[n] = (counts[n] || 0) + 1;
     const sum = numbers.reduce((a, b) => a + b, 0);
     const isTriple = Object.values(counts).some((c) => c === 3);
+    const thresholds = computeThresholds(diceMax);
     const keys = new Set<string>();
-    for (let n = 1; n <= 6; n++) {
+    for (let n = 1; n <= diceMax; n++) {
       if (counts[n] >= 1) keys.add(`single:${n}`);
       if (counts[n] >= 2) keys.add(`double:${n}`);
       if (counts[n] === 3) { keys.add(`triple:${n}`); keys.add("triple:0"); }
     }
-    if (!isTriple && sum >= 12) keys.add("big:0");
-    if (!isTriple && sum <= 9)  keys.add("small:0");
-    if (sum === 10 || sum === 11) keys.add("draw:0");
+    if (!isTriple && sum >= thresholds.bigMin) keys.add("big:0");
+    if (!isTriple && sum <= thresholds.smallMax) keys.add("small:0");
+    if (thresholds.drawValues.includes(sum)) keys.add("draw:0");
     keys.add(`sum:${sum}`);
     return keys;
   }
@@ -282,7 +286,7 @@ export function UserPage() {
                       myPlayer.lastWin > 0 ? "text-green-400" : "text-red-400"
                     }`}
                   >
-                    {myPlayer.lastWin > 0 ? `+${myPlayer.lastWin}đ` : `${myPlayer.lastWin}đ`}
+                    {myPlayer.lastWin > 0 ? `+${myPlayer.lastWin} ngô` : `${myPlayer.lastWin} ngô`}
                   </span>
                 )}
               </div>
@@ -384,7 +388,7 @@ export function UserPage() {
                         {p.name} {isMe && "(bạn)"}
                       </span>
                       <span className="font-mono font-bold" style={{ color: "#d4a050" }}>
-                        {p.coins.toLocaleString()}đ
+                        {p.coins.toLocaleString()} ngô
                       </span>
                     </div>
                   );
@@ -423,7 +427,7 @@ export function UserPage() {
                   )}
                 </div>
                 <span className="text-[10px] font-bold" style={{ color: "#d4a050" }}>
-                  {cartTotal.toLocaleString()}đ
+                  {cartTotal.toLocaleString()} ngô
                 </span>
               </div>
               <div className="px-3 pb-2 flex flex-col gap-1 max-h-[120px] overflow-y-auto">
@@ -456,7 +460,7 @@ export function UserPage() {
                       )}
                       <span className="flex-1" />
                       <span className="text-[11px] font-bold" style={{ color: "#d4a050" }}>
-                        {bet.amount.toLocaleString()}đ
+                        {bet.amount.toLocaleString()} ngô
                       </span>
                       {!confirmed && (
                         <button
@@ -485,7 +489,7 @@ export function UserPage() {
             </div>
             <div>
               <div className="font-bold text-sm text-white leading-tight">{myPlayer?.name ?? "—"}</div>
-              <div className="text-[10px] leading-tight" style={{ color: "#4a8a5a" }}>{(myPlayer?.coins ?? 0).toLocaleString()}đ</div>
+              <div className="text-[10px] leading-tight" style={{ color: "#4a8a5a" }}>{(myPlayer?.coins ?? 0).toLocaleString()} ngô</div>
             </div>
           </div>
           <div className="text-right">
@@ -494,7 +498,7 @@ export function UserPage() {
             </div>
             <div className="text-[10px]" style={{ color: "#4a8a5a" }}>
               Giá vé tạm tính:{" "}
-              <span className="font-bold" style={{ color: "#d4a050" }}>{totalBet}đ</span>
+              <span className="font-bold" style={{ color: "#d4a050" }}>{totalBet} ngô</span>
             </div>
           </div>
         </div>}
@@ -599,7 +603,7 @@ export function UserPage() {
                   border: "1px solid #22c55e40",
                 }}
               >
-                +{myPlayer.lastWin.toLocaleString()}đ
+                +{myPlayer.lastWin.toLocaleString()} ngô
               </div>
               <span className="text-xs font-medium mt-1" style={{ color: "#4ade80" }}>Chúc mừng!</span>
             </div>
@@ -614,7 +618,7 @@ export function UserPage() {
                 border: "1px solid #ef444430",
               }}
             >
-              {myPlayer.lastWin.toLocaleString()}đ
+              {myPlayer.lastWin.toLocaleString()} ngô
             </div>
           )}
           {status === "result" && myPlayer && myPlayer.lastWin === 0 && (
@@ -731,7 +735,7 @@ export function UserPage() {
                   style={{ background: "rgba(239,68,68,0.15)", border: "1px solid #ef444430" }}
                 >
                   <span className="text-red-200 font-medium">{v.name}</span>
-                  <span className="text-red-400 font-bold font-mono">−{v.amount.toLocaleString("vi-VN")}đ</span>
+                  <span className="text-red-400 font-bold font-mono">−{v.amount.toLocaleString("vi-VN")} ngô</span>
                 </div>
               ))}
             </div>
@@ -758,7 +762,7 @@ export function UserPage() {
             <div className="text-white font-black text-2xl tracking-wide">NỔ HŨ!</div>
             <div className="text-yellow-200 text-sm">Có người chơi nổ hũ và chia sẻ</div>
             <div className="text-yellow-300 font-black text-4xl">
-              {jackpot.total.toLocaleString("vi-VN")}đ
+              {jackpot.total.toLocaleString("vi-VN")} ngô
             </div>
             <div className="text-orange-200 text-sm">
               cho {jackpot.playerCount} người chơi
@@ -767,7 +771,7 @@ export function UserPage() {
               className="text-white font-bold text-xl px-4 py-2 rounded-xl"
               style={{ background: "rgba(0,0,0,0.3)" }}
             >
-              +{jackpot.perPlayer.toLocaleString("vi-VN")}đ / người
+              +{jackpot.perPlayer.toLocaleString("vi-VN")} ngô / người
             </div>
           </div>
           <p className="text-white/30 text-xs mt-6">Nhấn bất kỳ để đóng</p>

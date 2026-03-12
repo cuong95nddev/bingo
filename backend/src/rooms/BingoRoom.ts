@@ -48,6 +48,7 @@ export class BingoRoom extends Room {
       if (data.jackpotMin != null) this.state.config.jackpotMin = data.jackpotMin;
       if (data.jackpotMax != null) this.state.config.jackpotMax = data.jackpotMax;
       if (data.maxRounds != null) this.state.config.maxRounds = data.maxRounds;
+      if (data.diceMax != null) this.state.config.diceMax = Math.max(2, Math.min(6, Number(data.diceMax)));
     });
 
     this.onMessage("placeBet", (client, data: { type: string; value: number; amount: number }) => {
@@ -58,6 +59,11 @@ export class BingoRoom extends Room {
       if (amount < this.state.config.minBet) return;
       if (player.coins < amount) return;
 
+      const dMax = this.state.config.diceMax;
+      if ((data.type === "single" || data.type === "double") && (data.value < 1 || data.value > dMax)) return;
+      if (data.type === "triple" && data.value !== 0 && (data.value < 1 || data.value > dMax)) return;
+      if (data.type === "sum" && (data.value < 3 || data.value > 3 * dMax)) return;
+
       const bet = new Bet();
       bet.type = data.type;
       bet.value = data.value;
@@ -65,7 +71,7 @@ export class BingoRoom extends Room {
       player.bets.push(bet);
       player.coins -= amount;
 
-      this.broadcast("ticker", `${player.name} cược ${amount.toLocaleString("vi-VN")}đ → ${betLabel(data.type, data.value)}`);
+      this.broadcast("ticker", `${player.name} cược ${amount.toLocaleString("vi-VN")} ngô → ${betLabel(data.type, data.value)}`);
     });
 
     this.onMessage("clearBets", (client) => {
@@ -79,7 +85,19 @@ export class BingoRoom extends Room {
     });
   }
 
-  onJoin(client: Client, options: { name: string; visitorId: string }) {
+  private adminSessions = new Set<string>();
+
+  onJoin(client: Client, options: { name: string; visitorId: string; admin?: boolean; password?: string }) {
+    if (options.admin) {
+      const adminPwd = process.env.ADMIN_PASSWORD || "admin123";
+      if (options.password !== adminPwd) {
+        client.leave(4001);
+        return;
+      }
+      this.adminSessions.add(client.sessionId);
+      return;
+    }
+
     // Check if player already exists (reconnect by visitorId)
     let existing: Player | undefined;
     this.state.players.forEach((p) => {
@@ -101,7 +119,8 @@ export class BingoRoom extends Room {
     }
   }
 
-  onLeave(_client: Client, _code?: number) {
+  onLeave(client: Client, _code?: number) {
+    this.adminSessions.delete(client.sessionId);
     // Keep player state for reconnect — do NOT delete
   }
 
@@ -155,10 +174,11 @@ export class BingoRoom extends Room {
 
   private async startDrawingPhase() {
     this.state.round.status = "drawing";
+    const diceMax = this.state.config.diceMax;
     const numbers = [
-      Math.ceil(Math.random() * 6),
-      Math.ceil(Math.random() * 6),
-      Math.ceil(Math.random() * 6),
+      Math.ceil(Math.random() * diceMax),
+      Math.ceil(Math.random() * diceMax),
+      Math.ceil(Math.random() * diceMax),
     ];
 
     // Reveal numbers one by one
@@ -179,7 +199,7 @@ export class BingoRoom extends Room {
     // Calculate wins/losses for each player and broadcast ticker events
     this.state.players.forEach((player) => {
       const hasBets = player.bets.length > 0;
-      const delta = applyBets([...player.bets].filter((b): b is Bet => b !== undefined), numbers);
+      const delta = applyBets([...player.bets].filter((b): b is Bet => b !== undefined), numbers, this.state.config.diceMax);
 
       if (!hasBets && houseFeeEnabled && player.coins > 0) {
         const range = Math.max(1, houseFeeMax - houseFeeMin);
@@ -187,7 +207,7 @@ export class BingoRoom extends Room {
         player.coins = Math.max(0, player.coins - fee);
         player.lastWin = -fee;
         player.bets = new ArraySchema<Bet>();
-        this.broadcast("ticker", `🏦 ${player.name} bị thu phí ${fee.toLocaleString("vi-VN")}đ (không cược)`);
+        this.broadcast("ticker", `🏦 ${player.name} bị thu phí ${fee.toLocaleString("vi-VN")} ngô (không cược)`);
         return;
       }
 
@@ -196,9 +216,9 @@ export class BingoRoom extends Room {
       player.bets = new ArraySchema<Bet>();
 
       if (delta > 0) {
-        this.broadcast("ticker", `★ ${player.name} THẮNG +${delta.toLocaleString("vi-VN")}đ`);
+        this.broadcast("ticker", `★ ${player.name} THẮNG +${delta.toLocaleString("vi-VN")} ngô`);
       } else if (delta < 0) {
-        this.broadcast("ticker", `✗ ${player.name} thua ${delta.toLocaleString("vi-VN")}đ`);
+        this.broadcast("ticker", `✗ ${player.name} thua ${delta.toLocaleString("vi-VN")} ngô`);
       }
     });
 

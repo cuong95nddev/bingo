@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { computeSumPayouts, computeThresholds } from "../utils/diceUtils";
 
 interface Props {
   betType: string;
@@ -6,17 +7,8 @@ interface Props {
   availableCoins: number;
   onConfirm: (amount: number) => void;
   onClose: () => void;
+  diceMax: number;
 }
-
-const BET_LABELS: Record<string, string> = {
-  single: "1 số trùng",
-  double: "2 số trùng nhau",
-  triple: "3 số trùng nhau",
-  big: "Lớn (12–18)",
-  small: "Nhỏ (3–9)",
-  draw: "Hòa (10–11)",
-  sum: "Tổng",
-};
 
 const BET_MULT: Record<string, string> = {
   single: "×1.2~3",
@@ -25,13 +17,6 @@ const BET_MULT: Record<string, string> = {
   big: "×2",
   small: "×2",
   draw: "×4",
-};
-
-const SUM_MULT: Record<number, string> = {
-  3: "×120", 4: "×40", 5: "×20", 6: "×12",
-  7: "×8", 8: "×5.5", 9: "×4.7", 10: "×4.4",
-  11: "×4.4", 12: "×4.7", 13: "×5.5", 14: "×8",
-  15: "×12", 16: "×20", 17: "×40", 18: "×120",
 };
 
 function ballCount(type: string): number {
@@ -115,13 +100,26 @@ function Diamond({ amount }: { amount: number }) {
 const ROW1 = [0, 10, 20, 50, 100];
 const ROW2 = [300, 500, 1000];
 
-export function BetModal({ betType, betValue, availableCoins, onConfirm, onClose }: Props) {
+export function BetModal({ betType, betValue, availableCoins, onConfirm, onClose, diceMax }: Props) {
   const [amount, setAmount] = useState(0);
 
-  const label = betType === "sum" ? `Tổng ${betValue}` : (BET_LABELS[betType] ?? betType);
+  const thresholds = useMemo(() => computeThresholds(diceMax), [diceMax]);
+  const sumPayouts = useMemo(() => computeSumPayouts(diceMax), [diceMax]);
+
+  const betLabels: Record<string, string> = {
+    single: "1 số trùng",
+    double: "2 số trùng nhau",
+    triple: "3 số trùng nhau",
+    big: `Lớn (${thresholds.bigMin}–${3 * diceMax})`,
+    small: `Nhỏ (3–${thresholds.smallMax})`,
+    draw: `Hòa (${thresholds.drawValues.join("–")})`,
+    sum: "Tổng",
+  };
+
+  const label = betType === "sum" ? `Tổng ${betValue}` : (betLabels[betType] ?? betType);
   const mult =
     betType === "sum"
-      ? (SUM_MULT[betValue] ?? "")
+      ? (sumPayouts[betValue] ? `×${sumPayouts[betValue]}` : "")
       : betType === "triple" && betValue === 0
       ? "×20"
       : (BET_MULT[betType] ?? "");
@@ -166,7 +164,7 @@ export function BetModal({ betType, betValue, availableCoins, onConfirm, onClose
           <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 13 }}>
             Tổng tiền đặt:{" "}
           </span>
-          <span className="text-white font-bold text-sm">{amount}đ</span>
+          <span className="text-white font-bold text-sm">{amount} ngô</span>
         </div>
 
         {/* Bet type row */}
@@ -280,7 +278,7 @@ export function BetModal({ betType, betValue, availableCoins, onConfirm, onClose
           className="text-center py-2 italic text-xs"
           style={{ color: "rgba(255,255,255,0.45)" }}
         >
-          Không vượt quá {availableCoins}đ/kỳ QSMT
+          Không vượt quá {availableCoins} ngô/kỳ QSMT
         </div>
 
         {/* Confirm */}

@@ -64,6 +64,7 @@ app.get("/api/admin/config", adminAuth, (_req, res) => {
     jackpotMin: c.jackpotMin,
     jackpotMax: c.jackpotMax,
     maxRounds: c.maxRounds,
+    diceMax: c.diceMax,
   });
 });
 
@@ -83,12 +84,20 @@ app.post("/api/admin/config", adminAuth, (req, res) => {
   if (req.body.jackpotMin != null) c.jackpotMin = Number(req.body.jackpotMin);
   if (req.body.jackpotMax != null) c.jackpotMax = Number(req.body.jackpotMax);
   if (req.body.maxRounds != null) c.maxRounds = Number(req.body.maxRounds);
+  if (req.body.diceMax != null) c.diceMax = Math.max(2, Math.min(6, Number(req.body.diceMax)));
   res.json({ ok: true });
 });
 
 app.get("/api/admin/status", adminAuth, (_req, res) => {
   if (!bingoRoomRef) return res.json({ status: "waiting" });
-  res.json({ status: bingoRoomRef.state.round.status });
+  const r = bingoRoomRef.state.round;
+  res.json({
+    status: r.status,
+    countdown: r.countdown,
+    roundId: r.id,
+    numbers: [...r.numbers],
+    maxRounds: bingoRoomRef.state.config.maxRounds,
+  });
 });
 
 app.post("/api/admin/start", adminAuth, (_req, res) => {
